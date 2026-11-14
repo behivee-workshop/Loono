@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 300" role="img" aria-label="Loono faceplate diagram showing MIDI IN and OUT jacks, the OLED screen, an 8-pixel NeoPixel strip, the BPM pot, the play/pause and record buttons, and four track-select buttons, each labeled with its Arduino pin.">
+        <defs>
+          <marker id="pArrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L8,4 L0,8 Z" fill="#57606e"/>
+          </marker>
+        </defs>
+        <rect x="8" y="6" width="704" height="288" rx="16" fill="none" stroke="#57606e" stroke-width="2" opacity=".55"/>
+
+        <!-- MIDI IN -->
+        <circle cx="46" cy="150" r="24" fill="none" stroke="#57606e" stroke-width="2"/>
+        <circle cx="46" cy="150" r="3" fill="#57606e"/>
+        <text x="46" y="188" text-anchor="middle" font-size="12" font-weight="700" fill="#57606e">MIDI IN</text>
+        <text x="46" y="202" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">D0 &middot; RX1</text>
+
+        <!-- MIDI OUT -->
+        <circle cx="674" cy="150" r="24" fill="none" stroke="#57606e" stroke-width="2"/>
+        <circle cx="674" cy="150" r="3" fill="#57606e"/>
+        <text x="674" y="188" text-anchor="middle" font-size="12" font-weight="700" fill="#57606e">MIDI OUT</text>
+        <text x="674" y="202" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">D1 &middot; TX1</text>
+
+        <!-- OLED -->
+        <rect x="120" y="36" width="150" height="80" rx="4" fill="none" stroke="#57606e" stroke-width="2"/>
+        <line x1="134" y1="54" x2="242" y2="54" stroke="#57606e" opacity=".5"/>
+        <line x1="134" y1="70" x2="222" y2="70" stroke="#57606e" opacity=".5"/>
+        <line x1="134" y1="86" x2="232" y2="86" stroke="#57606e" opacity=".5"/>
+        <text x="195" y="132" text-anchor="middle" font-size="12" font-weight="700" fill="#57606e">OLED 128&times;64</text>
+        <text x="195" y="146" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">A4/A5 &middot; I2C 0x3C</text>
+
+        <!-- NeoPixel strip: 0-3 one per track, 4 play/pause, 5 record, 6 bpm, 7 midi -->
+        <g>
+          <circle cx="330" cy="30" r="6" fill="#0078ff"/>
+          <circle cx="358" cy="30" r="6" fill="#ff2878"/>
+          <circle cx="386" cy="30" r="6" fill="#ffaa00"/>
+          <circle cx="414" cy="30" r="6" fill="#34b857"/>
+          <circle cx="450" cy="30" r="6" fill="none" stroke="#57606e" stroke-width="1.5"/>
+          <circle cx="478" cy="30" r="6" fill="none" stroke="#57606e" stroke-width="1.5"/>
+          <circle cx="506" cy="30" r="6" fill="none" stroke="#57606e" stroke-width="1.5"/>
+          <circle cx="534" cy="30" r="6" fill="none" stroke="#57606e" stroke-width="1.5"/>
+        </g>
+        <text x="432" y="56" text-anchor="middle" font-size="12" font-weight="700" fill="#57606e">8&times; NeoPixel</text>
+        <text x="432" y="70" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">D8 &middot; tracks, play, rec, bpm, midi</text>
+
+        <!-- BPM pot -->
+        <circle cx="140" cy="210" r="26" fill="none" stroke="#57606e" stroke-width="2"/>
+        <line x1="140" y1="210" x2="140" y2="190" stroke="#57606e" stroke-width="2"/>
+        <text x="140" y="250" text-anchor="middle" font-size="12" font-weight="700" fill="#57606e">BPM</text>
+        <text x="140" y="264" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">A0 &middot; 40&ndash;240</text>
+
+        <!-- Play/Pause -->
+        <circle cx="260" cy="214" r="22" fill="none" stroke="#57606e" stroke-width="2"/>
+        <path d="M253,205 L253,223 L269,214 Z" fill="#57606e"/>
+        <text x="260" y="250" text-anchor="middle" font-size="12" font-weight="700" fill="#57606e">PLAY/PAUSE</text>
+        <text x="260" y="264" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">D2</text>
+
+        <!-- Record -->
+        <circle cx="340" cy="214" r="22" fill="none" stroke="#d98c00" stroke-width="2"/>
+        <circle cx="340" cy="214" r="9" fill="#d98c00"/>
+        <text x="340" y="250" text-anchor="middle" font-size="12" font-weight="700" fill="#57606e">REC</text>
+        <text x="340" y="264" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">D3 &middot; hold = clear</text>
+
+        <!-- Track buttons -->
+        <g>
+          <rect x="430" y="196" width="36" height="36" rx="6" fill="none" stroke="#0078ff" stroke-width="2.5"/>
+          <text x="448" y="219" text-anchor="middle" font-size="13" font-weight="700" fill="#57606e">1</text>
+          <rect x="482" y="196" width="36" height="36" rx="6" fill="none" stroke="#ff2878" stroke-width="2.5"/>
+          <text x="500" y="219" text-anchor="middle" font-size="13" font-weight="700" fill="#57606e">2</text>
+          <rect x="534" y="196" width="36" height="36" rx="6" fill="none" stroke="#ffaa00" stroke-width="2.5"/>
+          <text x="552" y="219" text-anchor="middle" font-size="13" font-weight="700" fill="#57606e">3</text>
+          <rect x="586" y="196" width="36" height="36" rx="6" fill="none" stroke="#34b857" stroke-width="2.5"/>
+          <text x="604" y="219" text-anchor="middle" font-size="13" font-weight="700" fill="#57606e">4</text>
+        </g>
+        <text x="526" y="250" text-anchor="middle" font-size="12" font-weight="700" fill="#57606e">TRACK SELECT</text>
+        <text x="526" y="264" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">D4&ndash;D7</text>
+      </svg>

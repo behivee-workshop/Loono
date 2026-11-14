@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 320" role="img" aria-label="Diagram showing MIDI IN splitting into two paths: an immediate thru echo straight to MIDI OUT, and a capture path through armed tracks and an event buffer into a playback scanner that re-sends notes on each track's own MIDI channel, which also feeds back into MIDI OUT.">
+          <defs>
+            <marker id="sArrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L8,4 L0,8 Z" fill="#57606e"/>
+            </marker>
+            <marker id="sArrowAccent" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L8,4 L0,8 Z" fill="#d98c00"/>
+            </marker>
+          </defs>
+
+          <rect x="20" y="124" width="130" height="52" rx="6" fill="none" stroke="#57606e" stroke-width="2"/>
+          <text x="85" y="146" text-anchor="middle" font-size="13" font-weight="700" fill="#57606e">MIDI IN</text>
+          <text x="85" y="162" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">NoteOn / NoteOff</text>
+
+          <rect x="610" y="20" width="130" height="52" rx="6" fill="none" stroke="#57606e" stroke-width="2"/>
+          <text x="675" y="42" text-anchor="middle" font-size="13" font-weight="700" fill="#57606e">MIDI OUT</text>
+          <text x="675" y="58" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">merged</text>
+
+          <!-- thru path -->
+          <polyline points="150,140 400,140 400,46 610,46" fill="none" stroke="#57606e" stroke-width="2" marker-end="url(#sArrow)"/>
+          <text x="400" y="128" text-anchor="middle" font-size="11" fill="#57606e" opacity=".75">thru &mdash; unchanged channel, immediate</text>
+
+          <!-- capture path -->
+          <rect x="170" y="238" width="150" height="54" rx="6" fill="none" stroke="#57606e" stroke-width="2"/>
+          <text x="245" y="260" text-anchor="middle" font-size="12" font-weight="700" fill="#57606e">Armed track(s)</text>
+          <text x="245" y="276" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">Recording / Overdubbing</text>
+
+          <polyline points="85,176 85,265 170,265" fill="none" stroke="#57606e" stroke-width="2" marker-end="url(#sArrow)"/>
+          <text x="90" y="222" font-size="11" fill="#57606e" opacity=".75">fans out to every armed track</text>
+
+          <rect x="365" y="238" width="140" height="54" rx="6" fill="none" stroke="#57606e" stroke-width="2"/>
+          <text x="435" y="260" text-anchor="middle" font-size="12" font-weight="700" fill="#57606e">events[]</text>
+          <text x="435" y="276" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">onAt + dur per note</text>
+          <polyline points="320,265 365,265" fill="none" stroke="#57606e" stroke-width="2" marker-end="url(#sArrow)"/>
+
+          <rect x="560" y="238" width="160" height="54" rx="6" fill="none" stroke="#57606e" stroke-width="2"/>
+          <text x="640" y="260" text-anchor="middle" font-size="12" font-weight="700" fill="#57606e">Playback scan</text>
+          <text x="640" y="276" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">crossing detector, every lap</text>
+          <polyline points="505,265 560,265" fill="none" stroke="#57606e" stroke-width="2" marker-end="url(#sArrow)"/>
+
+          <polyline points="660,238 660,170 675,170 675,72" fill="none" stroke="#d98c00" stroke-width="2.5" marker-end="url(#sArrowAccent)"/>
+          <text x="685" y="170" font-size="11" fill="#d98c00">noteOn on track's own ch 1&ndash;4,<tspan x="685" dy="13">off scheduled by dur</tspan></text>
+        </svg>
