@@ -18,7 +18,7 @@
 
           <!-- thru path -->
           <polyline points="150,140 400,140 400,46 610,46" fill="none" stroke="#57606e" stroke-width="2" marker-end="url(#sArrow)"/>
-          <text x="400" y="128" text-anchor="middle" font-size="11" fill="#57606e" opacity=".75">thru &mdash; unchanged channel, immediate</text>
+          <text x="400" y="128" text-anchor="middle" font-size="11" fill="#57606e" opacity=".75">thru — unchanged channel, immediate</text>
 
           <!-- capture path -->
           <rect x="170" y="238" width="150" height="54" rx="6" fill="none" stroke="#57606e" stroke-width="2"/>
@@ -39,5 +39,5 @@
           <polyline points="505,265 560,265" fill="none" stroke="#57606e" stroke-width="2" marker-end="url(#sArrow)"/>
 
           <polyline points="660,238 660,170 675,170 675,72" fill="none" stroke="#d98c00" stroke-width="2.5" marker-end="url(#sArrowAccent)"/>
-          <text x="685" y="170" font-size="11" fill="#d98c00">noteOn on track's own ch 1&ndash;4,<tspan x="685" dy="13">off scheduled by dur</tspan></text>
+          <text x="685" y="170" font-size="11" fill="#d98c00">noteOn on track's own ch 1–4,<tspan x="685" dy="13">off scheduled by dur</tspan></text>
         </svg>

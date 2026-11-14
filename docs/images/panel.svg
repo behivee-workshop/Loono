@@ -10,21 +10,21 @@
         <circle cx="46" cy="150" r="24" fill="none" stroke="#57606e" stroke-width="2"/>
         <circle cx="46" cy="150" r="3" fill="#57606e"/>
         <text x="46" y="188" text-anchor="middle" font-size="12" font-weight="700" fill="#57606e">MIDI IN</text>
-        <text x="46" y="202" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">D0 &middot; RX1</text>
+        <text x="46" y="202" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">D0 · RX1</text>
 
         <!-- MIDI OUT -->
         <circle cx="674" cy="150" r="24" fill="none" stroke="#57606e" stroke-width="2"/>
         <circle cx="674" cy="150" r="3" fill="#57606e"/>
         <text x="674" y="188" text-anchor="middle" font-size="12" font-weight="700" fill="#57606e">MIDI OUT</text>
-        <text x="674" y="202" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">D1 &middot; TX1</text>
+        <text x="674" y="202" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">D1 · TX1</text>
 
         <!-- OLED -->
         <rect x="120" y="36" width="150" height="80" rx="4" fill="none" stroke="#57606e" stroke-width="2"/>
         <line x1="134" y1="54" x2="242" y2="54" stroke="#57606e" opacity=".5"/>
         <line x1="134" y1="70" x2="222" y2="70" stroke="#57606e" opacity=".5"/>
         <line x1="134" y1="86" x2="232" y2="86" stroke="#57606e" opacity=".5"/>
-        <text x="195" y="132" text-anchor="middle" font-size="12" font-weight="700" fill="#57606e">OLED 128&times;64</text>
-        <text x="195" y="146" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">A4/A5 &middot; I2C 0x3C</text>
+        <text x="195" y="132" text-anchor="middle" font-size="12" font-weight="700" fill="#57606e">OLED 128×64</text>
+        <text x="195" y="146" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">A4/A5 · I2C 0x3C</text>
 
         <!-- NeoPixel strip: 0-3 one per track, 4 play/pause, 5 record, 6 bpm, 7 midi -->
         <g>
@@ -37,14 +37,14 @@
           <circle cx="506" cy="30" r="6" fill="none" stroke="#57606e" stroke-width="1.5"/>
           <circle cx="534" cy="30" r="6" fill="none" stroke="#57606e" stroke-width="1.5"/>
         </g>
-        <text x="432" y="56" text-anchor="middle" font-size="12" font-weight="700" fill="#57606e">8&times; NeoPixel</text>
-        <text x="432" y="70" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">D8 &middot; tracks, play, rec, bpm, midi</text>
+        <text x="432" y="56" text-anchor="middle" font-size="12" font-weight="700" fill="#57606e">8× NeoPixel</text>
+        <text x="432" y="70" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">D8 · tracks, play, rec, bpm, midi</text>
 
         <!-- BPM pot -->
         <circle cx="140" cy="210" r="26" fill="none" stroke="#57606e" stroke-width="2"/>
         <line x1="140" y1="210" x2="140" y2="190" stroke="#57606e" stroke-width="2"/>
         <text x="140" y="250" text-anchor="middle" font-size="12" font-weight="700" fill="#57606e">BPM</text>
-        <text x="140" y="264" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">A0 &middot; 40&ndash;240</text>
+        <text x="140" y="264" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">A0 · 40–240</text>
 
         <!-- Play/Pause -->
         <circle cx="260" cy="214" r="22" fill="none" stroke="#57606e" stroke-width="2"/>
@@ -56,7 +56,7 @@
         <circle cx="340" cy="214" r="22" fill="none" stroke="#d98c00" stroke-width="2"/>
         <circle cx="340" cy="214" r="9" fill="#d98c00"/>
         <text x="340" y="250" text-anchor="middle" font-size="12" font-weight="700" fill="#57606e">REC</text>
-        <text x="340" y="264" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">D3 &middot; hold = clear</text>
+        <text x="340" y="264" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">D3 · hold = clear</text>
 
         <!-- Track buttons -->
         <g>
@@ -70,5 +70,5 @@
           <text x="604" y="219" text-anchor="middle" font-size="13" font-weight="700" fill="#57606e">4</text>
         </g>
         <text x="526" y="250" text-anchor="middle" font-size="12" font-weight="700" fill="#57606e">TRACK SELECT</text>
-        <text x="526" y="264" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">D4&ndash;D7</text>
+        <text x="526" y="264" text-anchor="middle" font-size="10" fill="#57606e" opacity=".6">D4–D7</text>
       </svg>
