@@ -130,8 +130,17 @@ void setup() {
 
   Wire.begin();
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  showSplash();
+}
+
+void showSplash() {
   display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+  display.setTextSize(3);
+  display.setCursor(14, 24);
+  display.print("Loono");
   display.display();
+  delay(2000);
 }
 
 void loop() {
