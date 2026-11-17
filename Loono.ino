@@ -93,6 +93,7 @@ struct Track {
   uint8_t overdubStartIndex;
   bool pendingStart; // armed on EMPTY, fires on the next bar boundary
   bool pendingStop;  // armed on RECORDING, fires on the next bar boundary
+  unsigned long startBarCount; // global bar index the recording actually started on
   NoteEvent events[MAX_EVENTS_PER_TRACK];
   PendingOff pending[MAX_PENDING_OFFS];
 };
@@ -218,8 +219,8 @@ void readRecButton() {
   }
 }
 
-void closeRecording(Track &tr, unsigned long now) {
-  tr.loopLenMs = max(200UL, now - tr.recordStartAt);
+void closeRecording(Track &tr, unsigned long loopLenMs) {
+  tr.loopLenMs = max(200UL, loopLenMs);
   for (uint8_t i = 0; i < tr.eventCount; i++) {
     if (tr.events[i].dur == DUR_HELD) {
       tr.events[i].dur = max(10L, (long)(tr.loopLenMs - tr.events[i].onAt));
@@ -268,9 +269,12 @@ void checkBarBoundary() {
       tr.state = RECORDING;
       tr.recordStartAt = now;
       tr.eventCount = 0;
+      tr.startBarCount = barCount;
     } else if (tr.pendingStop) {
       tr.pendingStop = false;
-      closeRecording(tr, now);
+      // Exact bar count x current bar length -- not now-recordStartAt, which
+      // can undershoot a whole bar by however long this loop() tick was late.
+      closeRecording(tr, (barCount - tr.startBarCount) * barMs(currentBpm()));
     }
   }
 }
