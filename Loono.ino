@@ -91,6 +91,8 @@ struct Track {
   unsigned long lastElapsed;
   uint8_t eventCount;
   uint8_t overdubStartIndex;
+  bool pendingStart; // armed on EMPTY, fires on the next bar boundary
+  bool pendingStop;  // armed on RECORDING, fires on the next bar boundary
   NoteEvent events[MAX_EVENTS_PER_TRACK];
   PendingOff pending[MAX_PENDING_OFFS];
 };
@@ -101,6 +103,10 @@ uint8_t selectedTrack = 0; // 0-3
 unsigned long noteOnBlinkUntil = 0;
 const unsigned long NOTE_BLINK_MS = 30;
 void flashMidiLed() { noteOnBlinkUntil = millis() + NOTE_BLINK_MS; }
+
+unsigned long clearMsgUntil = 0;
+uint8_t clearedTrack = 0;
+const unsigned long CLEAR_MSG_MS = 1000;
 
 const uint32_t TRACK_COLOR[4] = {
   strip.Color(0, 120, 255),   // T1 blue
@@ -147,6 +153,7 @@ void loop() {
   readTrackButtons();
   readPlayButton();
   readRecButton();
+  checkBarBoundary();
   readMidi();
   updatePlayback();
   updatePendingOffs();
@@ -156,7 +163,7 @@ void loop() {
 
 // ---- BPM ------------------------------------------------------------------
 unsigned int currentBpm() {
-  return map(analogRead(BPM_POT_PIN), 0, 1023, 40, 240);
+  return map(analogRead(BPM_POT_PIN), 0, 1023, 60, 180);
 }
 unsigned long barMs(unsigned int bpm) {
   return (60000UL / bpm) * 4; // 4/4 bar
@@ -194,12 +201,12 @@ void readRecButton() {
     unsigned long now = millis();
     if (heldFor >= REC_LONG_PRESS_MS) {
       clearTrack(tr);
+      clearedTrack = selectedTrack;
+      clearMsgUntil = now + CLEAR_MSG_MS;
     } else if (tr.state == EMPTY) {
-      tr.state = RECORDING;
-      tr.recordStartAt = now;
-      tr.eventCount = 0;
+      tr.pendingStart = !tr.pendingStart; // arm for the next bar boundary; press again to cancel
     } else if (tr.state == RECORDING) {
-      closeRecording(tr, now);
+      tr.pendingStop = !tr.pendingStop; // arm for the next bar boundary; press again to cancel
     } else if (tr.state == PLAYING) {
       tr.overdubStartIndex = tr.eventCount;
       tr.state = OVERDUBBING;
@@ -240,6 +247,32 @@ void clearTrack(Track &tr) {
   tr.loopLenMs = 0;
   tr.eventCount = 0;
   tr.lastElapsed = 0;
+  tr.pendingStart = false;
+  tr.pendingStop = false;
+}
+
+// A first recording's start/stop is quantized to the bar grid -- press
+// Rec on an empty track and it arms, but actually starts on the "1" of
+// the next bar; press it again while recording and it arms a stop that
+// lands on the end of the 4th beat (i.e. the following bar boundary).
+unsigned long lastBarCount = 0;
+void checkBarBoundary() {
+  unsigned long now = millis();
+  unsigned long barCount = now / barMs(currentBpm());
+  if (barCount == lastBarCount) return;
+  lastBarCount = barCount;
+  for (uint8_t i = 0; i < 4; i++) {
+    Track &tr = tracks[i];
+    if (tr.pendingStart) {
+      tr.pendingStart = false;
+      tr.state = RECORDING;
+      tr.recordStartAt = now;
+      tr.eventCount = 0;
+    } else if (tr.pendingStop) {
+      tr.pendingStop = false;
+      closeRecording(tr, now);
+    }
+  }
 }
 
 void allNotesOff(Track &tr) {
@@ -392,37 +425,87 @@ uint32_t dim(uint32_t color, uint8_t divisor) {
 }
 
 // ---- OLED ----------------------------------------------------------------
-const char *STATE_LABEL[5] = {"Empty", "Rec", "Play", "Dub", "Pause"};
-const char STATE_CHAR[5] = {'-', 'R', 'P', 'D', '.'};
+// EMPTY/PAUSED share '-' (both read as "not playing") -- RECORDING/PLAYING/OVERDUBBING get R/P/O.
+const char STATE_CHAR[5] = {'-', 'R', 'P', 'O', '-'};
+const char *STATE_WORD[5] = {"EMPTY", "REC", "PLAY", "ODUB", "STOP"};
 
 void updateDisplay() {
   Track &sel = tracks[selectedTrack];
-  display.clearDisplay();
-  display.setTextColor(SSD1306_WHITE);
+  unsigned long now = millis();
+  unsigned int bpm = currentBpm();
+  unsigned long bm = barMs(bpm);          // one bar = 4 beats
+  unsigned long beatDurMs = 60000UL / bpm;
 
-  display.setTextSize(2);
-  display.setCursor(0, 0);
-  display.print('T'); display.print(selectedTrack + 1);
-  display.print(' ');
-  display.println(STATE_LABEL[sel.state]);
-
-  display.setTextSize(1);
-  display.setCursor(0, 20);
-  display.print("BPM "); display.print(currentBpm());
+  // One shared time base for both the bar number and the beat indicator:
+  // the selected track's own elapsed position once it has timing, else a
+  // free-running clock (idle metronome) so the beat box still ticks.
+  unsigned long elapsed;
   if (sel.loopLenMs > 0) {
-    unsigned long bars = max(1UL, (sel.loopLenMs + barMs(currentBpm()) / 2) / barMs(currentBpm()));
-    display.print("  Bars "); display.print(bars);
+    unsigned long refNow = (sel.state == PAUSED) ? sel.pausedAt : now; // frozen while paused
+    elapsed = elapsedFor(sel, refNow);
+  } else if (sel.state == RECORDING) {
+    elapsed = now - sel.recordStartAt;
+  } else {
+    elapsed = now;
   }
+  uint8_t beat = (elapsed / beatDurMs) % 4;
+  bool beatOn = (elapsed % beatDurMs) < (beatDurMs * 18 / 100);
 
-  display.setCursor(0, 36);
+  display.clearDisplay();
+  display.setTextSize(1);
+
+  // Left rail: T1-T4, selected row inverted. 4 rows of 12px exactly fill
+  // the 48px above the bottom strip -- don't let this drift from that.
   for (uint8_t i = 0; i < 4; i++) {
-    display.print(i + 1); display.print(':'); display.print(STATE_CHAR[tracks[i].state]);
-    display.print(i == selectedTrack ? '<' : ' ');
-    display.print(' ');
+    uint8_t y = i * 12;
+    if (i == selectedTrack) {
+      display.fillRect(0, y, 35, 12, SSD1306_WHITE);
+      display.setTextColor(SSD1306_BLACK);
+    } else {
+      display.setTextColor(SSD1306_WHITE);
+    }
+    display.setCursor(3, y + 2);
+    display.print('T'); display.print(i + 1); display.print(' '); display.print(STATE_CHAR[tracks[i].state]);
+  }
+  display.drawFastVLine(35, 0, 64, SSD1306_WHITE);
+  display.drawFastHLine(35, 48, 128 - 35, SSD1306_WHITE);
+
+  // Right side: BPM, then either a clear confirmation or the selected track's state, as big as fits.
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(40, 0);
+  display.print("BPM "); display.print(bpm);
+
+  if (now < clearMsgUntil) {
+    display.setCursor(40, 20);
+    display.print('T'); display.print(clearedTrack + 1); display.print(" CLEARED");
+  } else {
+    const char *word = STATE_WORD[sel.state];
+    uint8_t size = (strlen(word) <= 4) ? 3 : 2; // EMPTY is the one 5-letter word
+    display.setTextSize(size);
+    display.setCursor(40, 14);
+    display.print(word);
+    display.setTextSize(1);
   }
 
-  display.setCursor(0, 52);
-  display.print("Hold Rec to clear");
+  // Bottom strip: bar x/total + 4 beat boxes, both confined to the right box
+  // (x >= 40) so they never run under the left rail's T4 row.
+  display.setCursor(40, 53);
+  if (sel.loopLenMs > 0) {
+    unsigned long bars = max(1UL, (sel.loopLenMs + bm / 2) / bm);
+    display.print(min(bars, elapsed / bm + 1)); display.print('/'); display.print(bars);
+  } else if (sel.state == RECORDING) {
+    display.print(elapsed / bm + 1);
+  } else {
+    display.print("-/-");
+  }
+
+  const uint8_t boxW = 8, gap = 3, totalW = 4 * boxW + 3 * gap;
+  uint8_t bx = 128 - totalW - 4;
+  for (uint8_t i = 0; i < 4; i++) {
+    if (i == beat && beatOn) display.fillRect(bx, 53, boxW, 8, SSD1306_WHITE);
+    else display.drawRect(bx, 53, boxW, 8, SSD1306_WHITE);
+    bx += boxW + gap;
+  }
 
   display.display();
 }
