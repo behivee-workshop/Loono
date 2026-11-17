@@ -468,7 +468,7 @@ void updateDisplay() {
     display.print('T'); display.print(i + 1); display.print(' '); display.print(STATE_CHAR[tracks[i].state]);
   }
   display.drawFastVLine(35, 0, 64, SSD1306_WHITE);
-  display.drawFastHLine(35, 48, 128 - 35, SSD1306_WHITE);
+  display.drawFastHLine(0, 48, 128, SSD1306_WHITE);
 
   // Right side: BPM, then either a clear confirmation or the selected track's state, as big as fits.
   display.setTextColor(SSD1306_WHITE);
