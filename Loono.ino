@@ -9,19 +9,19 @@
 //                  native-USB Serial is a separate peripheral, so it stays
 //                  free the whole time for debug prints or the self-test
 //                  below -- unlike an Uno R3, where D0/D1 *is* USB serial.
-//   D2             Play/pause button (INPUT_PULLUP, active low)
-//   D3             Record/overdub button (INPUT_PULLUP, active low).
+//   D2-D5          Track select buttons 1-4 (INPUT_PULLUP, active low)
+//   D6             Play/pause button (INPUT_PULLUP, active low)
+//   D7             Record/overdub button (INPUT_PULLUP, active low).
 //                  Short press: empty->record->stop->overdub->stop->... .
-//                  Long press (>800ms): clear the selected track.
-//   D4-D7          Track select buttons 1-4 (INPUT_PULLUP, active low)
-//   D8             NeoPixel data, 8 LEDs, one each:
-//                  0-3 one per track (its own color; off/solid/dim/blink by
-//                      that track's own state), 4 Play/Pause (lit while the
-//                      selected track is playing), 5 Record (blinks red
-//                      while the selected track is recording or
-//                      overdubbing), 6 BPM (blinks on the beat), 7 MIDI note
-//                      on (flashes on every outgoing Note On, live or
-//                      looped).
+//   D8             Mute/unmute button for the selected track (INPUT_PULLUP,
+//                  active low). No undo exists, so this is D8's job.
+//   D9             Clear button for the selected track (INPUT_PULLUP, active low)
+//   D11            NeoPixel data, 4 LEDs at ~10% brightness: a single lit
+//                  LED chases positions 0-3 with the beat (LED N = beat
+//                  N+1 of the bar), colored by the selected track's state --
+//                  green playing, red stopped (empty/paused), violet armed
+//                  to start on beat 1, orange while actually recording or
+//                  overdubbing.
 //   A0             BPM pot (40-240 BPM), used for the bar-count readout and
 //                  the idle metronome pulse -- it does not quantize
 //                  recording; punching in/out is immediate, same as the
@@ -49,16 +49,14 @@ MIDI_CREATE_INSTANCE(decltype(Serial1), Serial1, MIDI); // DIN jacks, D0/D1
 Adafruit_SSD1306 display(128, 64, &Wire, -1);
 
 // ---- Pins ----
-const uint8_t PLAY_PIN = 2, REC_PIN = 3;
-const uint8_t TRACK_PINS[4] = {4, 5, 6, 7};
-const uint8_t NEOPIXEL_PIN = 8;
+const uint8_t TRACK_PINS[4] = {2, 3, 4, 5};
+const uint8_t PLAY_PIN = 6, REC_PIN = 7, MUTE_PIN = 8, CLEAR_PIN = 9;
+const uint8_t NEOPIXEL_PIN = 11;
 const uint8_t BPM_POT_PIN = A0;
 
-Adafruit_NeoPixel strip(8, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
-Bounce playBtn, recBtn;
+Adafruit_NeoPixel strip(4, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
+Bounce playBtn, recBtn, muteBtn, clearBtn;
 Bounce trackBtns[4];
-
-const unsigned long REC_LONG_PRESS_MS = 800;
 
 // ---- Loop storage --------------------------------------------------------
 // ponytail: 64 events/track, 16 overlapping tails/track -- generous headroom
@@ -84,6 +82,7 @@ struct PendingOff {
 struct Track {
   uint8_t ch;             // MIDI channel 1-4, matches track number
   TrackState state;
+  bool muted;
   unsigned long loopLenMs;
   unsigned long loopStartAt;
   unsigned long recordStartAt;
@@ -101,20 +100,8 @@ struct Track {
 Track tracks[4];
 uint8_t selectedTrack = 0; // 0-3
 
-unsigned long noteOnBlinkUntil = 0;
-const unsigned long NOTE_BLINK_MS = 30;
-void flashMidiLed() { noteOnBlinkUntil = millis() + NOTE_BLINK_MS; }
-
 unsigned long clearMsgUntil = 0;
-uint8_t clearedTrack = 0;
 const unsigned long CLEAR_MSG_MS = 1000;
-
-const uint32_t TRACK_COLOR[4] = {
-  strip.Color(0, 120, 255),   // T1 blue
-  strip.Color(255, 40, 120),  // T2 pink
-  strip.Color(255, 170, 0),   // T3 amber
-  strip.Color(60, 220, 90),   // T4 green
-};
 
 void setup() {
 #ifdef LOONO_SELFTEST
@@ -122,6 +109,8 @@ void setup() {
 #endif
   playBtn.attach(PLAY_PIN, INPUT_PULLUP); playBtn.interval(5);
   recBtn.attach(REC_PIN, INPUT_PULLUP); recBtn.interval(5);
+  muteBtn.attach(MUTE_PIN, INPUT_PULLUP); muteBtn.interval(5);
+  clearBtn.attach(CLEAR_PIN, INPUT_PULLUP); clearBtn.interval(5);
   for (uint8_t i = 0; i < 4; i++) {
     trackBtns[i].attach(TRACK_PINS[i], INPUT_PULLUP);
     trackBtns[i].interval(5);
@@ -133,6 +122,7 @@ void setup() {
   MIDI.turnThruOff(); // we do our own thru so we can also feed the looper
 
   strip.begin();
+  strip.setBrightness(26); // ~10% brightness
   strip.show();
 
   Wire.begin();
@@ -154,6 +144,8 @@ void loop() {
   readTrackButtons();
   readPlayButton();
   readRecButton();
+  readMuteButton();
+  readClearButton();
   checkBarBoundary();
   readMidi();
   updatePlayback();
@@ -197,14 +189,9 @@ void readPlayButton() {
 void readRecButton() {
   recBtn.update();
   if (recBtn.rose()) {
-    unsigned long heldFor = recBtn.duration();
     Track &tr = tracks[selectedTrack];
     unsigned long now = millis();
-    if (heldFor >= REC_LONG_PRESS_MS) {
-      clearTrack(tr);
-      clearedTrack = selectedTrack;
-      clearMsgUntil = now + CLEAR_MSG_MS;
-    } else if (tr.state == EMPTY) {
+    if (tr.state == EMPTY) {
       tr.pendingStart = !tr.pendingStart; // arm for the next bar boundary; press again to cancel
     } else if (tr.state == RECORDING) {
       tr.pendingStop = !tr.pendingStop; // arm for the next bar boundary; press again to cancel
@@ -217,6 +204,21 @@ void readRecButton() {
     }
     // PAUSED: no-op -- resume with Play first.
   }
+}
+
+void readMuteButton() {
+  muteBtn.update();
+  if (!muteBtn.fell()) return;
+  Track &tr = tracks[selectedTrack];
+  tr.muted = !tr.muted;
+  if (tr.muted) allNotesOff(tr); // silence anything already sounding immediately
+}
+
+void readClearButton() {
+  clearBtn.update();
+  if (!clearBtn.fell()) return;
+  clearTrack(tracks[selectedTrack]);
+  clearMsgUntil = millis() + CLEAR_MSG_MS;
 }
 
 void closeRecording(Track &tr, unsigned long loopLenMs) {
@@ -305,7 +307,6 @@ void readMidi() {
   MIDI.send(type, note, vel, ch); // live playthrough, unchanged
 
   bool isOn = (type == midi::NoteOn && vel > 0);
-  if (isOn) flashMidiLed();
   unsigned long now = millis();
   for (uint8_t i = 0; i < 4; i++) {
     Track &tr = tracks[i];
@@ -350,9 +351,8 @@ void updatePlayback() {
       if (ev.dur == DUR_HELD) continue; // still being recorded this instant
       bool crossed = (prev <= elapsed) ? (ev.onAt > prev && ev.onAt <= elapsed)
                                         : (ev.onAt > prev || ev.onAt <= elapsed);
-      if (crossed) {
+      if (crossed && !tr.muted) {
         MIDI.sendNoteOn(ev.midi, ev.vel, tr.ch);
-        flashMidiLed();
         schedulePendingOff(tr, ev.midi, now + ev.dur);
       }
     }
@@ -386,63 +386,54 @@ void updatePendingOffs() {
   }
 }
 
-// ---- NeoPixels: 8 single-purpose LEDs -- 4 tracks, play/pause, record, BPM, MIDI activity ----
+// ---- NeoPixels: a single lit LED chases positions 0-3 with the beat (LED N
+// = beat N+1 of the bar), colored by the selected track's state -- green
+// playing, red stopped (empty/paused), violet armed to start on beat 1,
+// orange while actually recording or overdubbing. ----
 void updateNeopixels() {
-  unsigned long now = millis();
-  unsigned int bpm = currentBpm();
-  unsigned long beatMs = 60000UL / bpm;
-  bool blinkOn = (now % 300) < 150;
+  unsigned long beatMs = 60000UL / currentBpm();
+  uint8_t beatIndex = (millis() / beatMs) % 4;
   Track &sel = tracks[selectedTrack];
 
-  for (uint8_t i = 0; i < 4; i++) {
-    Track &tr = tracks[i];
-    uint32_t color;
-    switch (tr.state) {
-      case RECORDING:   color = blinkOn ? strip.Color(255, 0, 0) : 0; break;
-      case OVERDUBBING: color = blinkOn ? TRACK_COLOR[i] : strip.Color(255, 60, 0); break;
-      case PLAYING:     color = TRACK_COLOR[i]; break;
-      case PAUSED:      color = dim(TRACK_COLOR[i], 3); break;
-      default:          color = 0; break; // EMPTY
-    }
-    if (i != selectedTrack && tr.state != RECORDING) color = dim(color, 2);
-    strip.setPixelColor(i, color);
-  }
+  uint32_t color;
+  if (sel.pendingStart) color = strip.Color(150, 0, 255); // violet
+  else if (sel.state == RECORDING || sel.state == OVERDUBBING) color = strip.Color(255, 110, 0); // orange
+  else if (sel.state == PLAYING) color = strip.Color(0, 255, 0); // green
+  else color = strip.Color(255, 0, 0); // red -- EMPTY, PAUSED (stop)
 
-  bool playingLit = (sel.state == PLAYING || sel.state == OVERDUBBING);
-  strip.setPixelColor(4, playingLit ? strip.Color(255, 255, 255) : (sel.state == PAUSED ? dim(strip.Color(255, 255, 255), 4) : 0));
-
-  bool recordingLit = (sel.state == RECORDING || sel.state == OVERDUBBING) && blinkOn;
-  strip.setPixelColor(5, recordingLit ? strip.Color(255, 0, 0) : 0);
-
-  bool beatOn = (now % beatMs) < 40;
-  strip.setPixelColor(6, beatOn ? strip.Color(255, 255, 255) : 0);
-
-  bool midiOn = now < noteOnBlinkUntil;
-  strip.setPixelColor(7, midiOn ? strip.Color(0, 255, 255) : 0);
-
+  for (uint8_t i = 0; i < 4; i++) strip.setPixelColor(i, i == beatIndex ? color : 0);
   strip.show();
 }
 
-uint32_t dim(uint32_t color, uint8_t divisor) {
-  uint8_t r = (uint8_t)(color >> 16), g = (uint8_t)(color >> 8), b = (uint8_t)color;
-  return strip.Color(r / divisor, g / divisor, b / divisor);
+// ---- OLED ------------------------------------------------------------
+// Big center word for the selected track: "Next" overrides everything else
+// while armed (about to start recording/overdubbing on the next bar's beat
+// 1); RECORDING and OVERDUBBING both read as "Overdub".
+const char *bigWord(Track &tr) {
+  if (tr.pendingStart) return "Next";
+  switch (tr.state) {
+    case PLAYING: return "Play";
+    case RECORDING:
+    case OVERDUBBING: return "Overdub";
+    default: return "Stop"; // EMPTY, PAUSED
+  }
 }
 
-// ---- OLED ----------------------------------------------------------------
-// EMPTY/PAUSED share '-' (both read as "not playing") -- RECORDING/PLAYING/OVERDUBBING get R/P/O.
-const char STATE_CHAR[5] = {'-', 'R', 'P', 'O', '-'};
-const char *STATE_WORD[5] = {"EMPTY", "REC", "PLAY", "ODUB", "STOP"};
+void printCentered(const char *s, int16_t y) {
+  int16_t x1, y1; uint16_t w, h;
+  display.getTextBounds(s, 0, 0, &x1, &y1, &w, &h);
+  display.setCursor((128 - (int16_t)w) / 2, y);
+  display.print(s);
+}
 
+// Layout: top line BPM (left) / bar x-of-total (right), big state word
+// centered in the middle, "Track N" centered along the bottom.
 void updateDisplay() {
   Track &sel = tracks[selectedTrack];
   unsigned long now = millis();
   unsigned int bpm = currentBpm();
-  unsigned long bm = barMs(bpm);          // one bar = 4 beats
-  unsigned long beatDurMs = 60000UL / bpm;
+  unsigned long bm = barMs(bpm); // one bar = 4 beats
 
-  // One shared time base for both the bar number and the beat indicator:
-  // the selected track's own elapsed position once it has timing, else a
-  // free-running clock (idle metronome) so the beat box still ticks.
   unsigned long elapsed;
   if (sel.loopLenMs > 0) {
     unsigned long refNow = (sel.state == PAUSED) ? sel.pausedAt : now; // frozen while paused
@@ -450,66 +441,38 @@ void updateDisplay() {
   } else if (sel.state == RECORDING) {
     elapsed = now - sel.recordStartAt;
   } else {
-    elapsed = now;
+    elapsed = 0;
   }
-  uint8_t beat = (elapsed / beatDurMs) % 4;
-  bool beatOn = (elapsed % beatDurMs) < (beatDurMs * 18 / 100);
 
   display.clearDisplay();
-  display.setTextSize(1);
-
-  // Left rail: T1-T4, selected row inverted. 4 rows of 12px exactly fill
-  // the 48px above the bottom strip -- don't let this drift from that.
-  for (uint8_t i = 0; i < 4; i++) {
-    uint8_t y = i * 12;
-    if (i == selectedTrack) {
-      display.fillRect(0, y, 35, 12, SSD1306_WHITE);
-      display.setTextColor(SSD1306_BLACK);
-    } else {
-      display.setTextColor(SSD1306_WHITE);
-    }
-    display.setCursor(3, y + 2);
-    display.print('T'); display.print(i + 1); display.print(' '); display.print(STATE_CHAR[tracks[i].state]);
-  }
-  display.drawFastVLine(35, 0, 64, SSD1306_WHITE);
-  display.drawFastHLine(0, 48, 128, SSD1306_WHITE);
-
-  // Right side: BPM, then either a clear confirmation or the selected track's state, as big as fits.
   display.setTextColor(SSD1306_WHITE);
-  display.setCursor(40, 0);
+
+  display.setTextSize(1);
+  display.setCursor(0, 0);
   display.print("BPM "); display.print(bpm);
 
-  if (now < clearMsgUntil) {
-    display.setCursor(40, 20);
-    display.print('T'); display.print(clearedTrack + 1); display.print(" CLEARED");
-  } else {
-    const char *word = STATE_WORD[sel.state];
-    uint8_t size = (strlen(word) <= 4) ? 3 : 2; // EMPTY is the one 5-letter word
-    display.setTextSize(size);
-    display.setCursor(40, 14);
-    display.print(word);
-    display.setTextSize(1);
-  }
-
-  // Bottom strip: bar x/total + 4 beat boxes, both confined to the right box
-  // (x >= 40) so they never run under the left rail's T4 row.
-  display.setCursor(40, 53);
+  char barBuf[8];
   if (sel.loopLenMs > 0) {
     unsigned long bars = max(1UL, (sel.loopLenMs + bm / 2) / bm);
-    display.print(min(bars, elapsed / bm + 1)); display.print('/'); display.print(bars);
+    snprintf(barBuf, sizeof(barBuf), "%lu/%lu", min(bars, elapsed / bm + 1), bars);
   } else if (sel.state == RECORDING) {
-    display.print(elapsed / bm + 1);
+    snprintf(barBuf, sizeof(barBuf), "%lu", elapsed / bm + 1);
   } else {
-    display.print("-/-");
+    strcpy(barBuf, "-/-");
   }
+  int16_t bx1, by1; uint16_t bw, bh;
+  display.getTextBounds(barBuf, 0, 0, &bx1, &by1, &bw, &bh);
+  display.setCursor(127 - bw, 0);
+  display.print(barBuf);
 
-  const uint8_t boxW = 8, gap = 3, totalW = 4 * boxW + 3 * gap;
-  uint8_t bx = 128 - totalW - 4;
-  for (uint8_t i = 0; i < 4; i++) {
-    if (i == beat && beatOn) display.fillRect(bx, 53, boxW, 8, SSD1306_WHITE);
-    else display.drawRect(bx, 53, boxW, 8, SSD1306_WHITE);
-    bx += boxW + gap;
-  }
+  const char *word = (now < clearMsgUntil) ? "Clear" : bigWord(sel);
+  display.setTextSize(strlen(word) <= 4 ? 3 : 2); // Overdub/Clear are the long ones
+  printCentered(word, 22);
+
+  char trackBuf[8];
+  snprintf(trackBuf, sizeof(trackBuf), "Track %d", selectedTrack + 1);
+  display.setTextSize(2);
+  printCentered(trackBuf, 46);
 
   display.display();
 }
