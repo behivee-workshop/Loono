@@ -78,10 +78,10 @@ Edit arms the active channel only; the other three keep playing or resting as al
 |---|---|
 | `D2` | Step back — moves the cursor to the previous step, no write |
 | `D3` | Step forward — moves the cursor to the next step, no write |
-| `D4` | Clear — sets the step at the cursor to rest; cursor does not move |
-| `D5` | Exit edit — disarms edit mode; `D2`–`D5` revert to channel select |
+| `D4` | Clear step — sets the step at the cursor to rest; cursor does not move |
+| `D5` | Clear channel — wipes all 16 steps on this channel to rest; cursor stays put |
 
-`D7` (Edit) still arms and disarms edit mode on its own, same as before — `D5` is just the exit reachable from inside edit, since `D2`–`D5` no longer select channels while armed.
+`D7` (Edit) is still the only way in or out of edit mode — pressing it again disarms and returns `D2`–`D5` to channel select.
 
 ## Playback
 
