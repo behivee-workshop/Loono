@@ -31,6 +31,34 @@ flowchart LR
 | `SDA` / `SCL` | OLED | 128×64 SSD1306, I2C |
 | `D11` | NeoPixel ×4 | One LED per channel, mirrors active/mode state |
 
+## Button map by mode
+
+Physical layout: `D2`–`D5` are the top row, `D6`–`D9` the bottom row.
+
+### Standard mode
+
+| D2 | D3 | D4 | D5 |
+|---|---|---|---|
+| Select ch 1 | Select ch 2 | Select ch 3 | Select ch 4 |
+
+| D6 | D7 | D8 | D9 |
+|---|---|---|---|
+| Play / Pause | Edit (arm) | — | — |
+
+Pressing the already-active channel button toggles it between standard and sequencer mode instead of selecting it — see [Channel modes](#channel-modes).
+
+### Edit mode (armed)
+
+| D2 | D3 | D4 | D5 |
+|---|---|---|---|
+| Step back | Step forward | Clear step | Clear channel |
+
+| D6 | D7 | D8 | D9 |
+|---|---|---|---|
+| Play / Pause* | Edit (exit) | Skip | Tie |
+
+\* the shared clock is already stopped the moment Edit was pressed — see [Recording](#recording-edit-mode).
+
 ## Channel modes
 
 Each channel is independently in one of two modes — this is per channel, not tied to which one is currently active:
