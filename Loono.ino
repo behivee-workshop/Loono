@@ -386,9 +386,11 @@ void updateDisplay(uint32_t now) {
   display.clearDisplay();
 
   display.setTextSize(1);
-  display.setCursor(0, 0);
-  display.print("CH");
-  display.print(active + 1);
+  if (chans[active].sequencer) {  // in standard the big line already says it
+    display.setCursor(0, 0);
+    display.print("CH");
+    display.print(active + 1);
+  }
 
   display.setCursor(SCREEN_WIDTH - 46, 0);
   display.print(bpm);
@@ -403,6 +405,9 @@ void updateDisplay(uint32_t now) {
   } else if (chans[active].sequencer) {
     display.print(playing ? "Play. " : "Pause ");
     printStepNum(playStep + 1);
+  } else {
+    display.print("Loono ");  // standard mode home screen: device + channel
+    printStepNum(active + 1);
   }
 
   if (editing && recCount) {

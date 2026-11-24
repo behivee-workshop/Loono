@@ -26,7 +26,7 @@ Remapping happens per message, using whichever channel is active right then — 
 | `A0` | Tempo pot | 60–160 BPM, live while playing |
 | `RX` / `D0` | MIDI in | Opto-isolated DIN in from the Keylab, 31250 baud |
 | `TX` / `D1` | MIDI out | DIN out, daisy-chains to the synths |
-| `SDA` / `SCL` | OLED | 128×64 SSD1306, I2C — shows channel, BPM, transport + step (`Play. 05`), and note names while editing |
+| `SDA` / `SCL` | OLED | 128×64 SSD1306, I2C — shows BPM, channel or transport + step (`Loono 01` / `Play. 05`), and note names while editing |
 | `D11` | NeoPixel ×4 | One LED per channel, mirrors active/mode state |
 
 | LED state | Appearance |
@@ -36,7 +36,7 @@ Remapping happens per message, using whichever channel is active right then — 
 | Inactive, sequencer | Dim violet |
 | Inactive, standard | Off |
 
-Colour carries the mode, so the OLED doesn't repeat it — the screen shows channel, BPM, and transport/step instead: `Play. 05`, `Pause 05`, or `Edit 03` with the held note names beneath while a chord is being built.
+Colour carries the mode, so the OLED doesn't repeat it. The big line reads `Loono 01` in standard mode (device + active channel), and `Play. 05` / `Pause 05` / `Edit 03` once the channel has a lane, with held note names beneath while a chord is being built. BPM sits top-right throughout.
 
 ## Button map by mode
 
