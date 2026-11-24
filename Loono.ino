@@ -103,6 +103,9 @@ uint8_t selectedTrack = 0; // 0-3
 unsigned long clearMsgUntil = 0;
 const unsigned long CLEAR_MSG_MS = 1000;
 
+unsigned long ledOffAt = 0;
+const unsigned long LED_FLASH_MS = 20;
+
 void setup() {
 #ifdef LOONO_SELFTEST
   selfTest();
@@ -117,6 +120,8 @@ void setup() {
     tracks[i].ch = i + 1;
     tracks[i].state = EMPTY;
   }
+
+  pinMode(LED_BUILTIN, OUTPUT);
 
   MIDI.begin(MIDI_CHANNEL_OMNI);
   MIDI.turnThruOff(); // we do our own thru so we can also feed the looper
@@ -152,6 +157,14 @@ void loop() {
   updatePendingOffs();
   updateNeopixels();
   updateDisplay();
+  updateLed();
+}
+
+void updateLed() {
+  if (ledOffAt && millis() >= ledOffAt) {
+    digitalWrite(LED_BUILTIN, LOW);
+    ledOffAt = 0;
+  }
 }
 
 // ---- BPM ------------------------------------------------------------------
@@ -308,6 +321,10 @@ void readMidi() {
 
   bool isOn = (type == midi::NoteOn && vel > 0);
   unsigned long now = millis();
+  if (isOn) {
+    digitalWrite(LED_BUILTIN, HIGH);
+    ledOffAt = now + LED_FLASH_MS;
+  }
   for (uint8_t i = 0; i < 4; i++) {
     Track &tr = tracks[i];
     if (tr.state != RECORDING && tr.state != OVERDUBBING) continue;
