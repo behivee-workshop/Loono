@@ -20,7 +20,7 @@ flowchart LR
 
 | Pin | Function | Notes |
 |---|---|---|
-| `D2`–`D5` | Channel buttons 1–4 | Select active channel; second press on the active one mutes/unmutes its lane |
+| `D2`–`D5` | Channel buttons 1–4 | Select active channel; second press on the active one toggles it between standard and sequencer mode |
 | `D6` | Play / Pause | Starts or stops the shared clock for all 4 lanes |
 | `D7` | Edit | Arms step recording on the active channel |
 | `D8` | Skip | Edit mode only — writes a rest, advances |
@@ -29,15 +29,22 @@ flowchart LR
 | `RX` / `D0` | MIDI in | Opto-isolated DIN in from the Keylab, 31250 baud |
 | `TX` / `D1` | MIDI out | DIN out, daisy-chains to the synths |
 | `SDA` / `SCL` | OLED | 128×64 SSD1306, I2C |
-| `D11` | NeoPixel ×4 | One LED per channel, mirrors active/muted state |
+| `D11` | NeoPixel ×4 | One LED per channel, mirrors active/mode state |
 
-## Channel LED states
+## Channel modes
+
+Each channel is independently in one of two modes — this is per channel, not tied to which one is currently active:
+
+- **Standard** — no lane. Notes played on the Keylab while this channel is active pass straight through on its MIDI channel, as today.
+- **Sequencer** — the channel's 16-step lane exists and joins the shared clock. Its own play/stopped state follows the global transport (see Playback below), not a per-channel one.
+
+Active channel selection and per-channel mode are independent: several channels can be in sequencer mode at once, and only one is "active" (the live-note / edit target) at a time.
 
 | State | LED |
 |---|---|
-| Active, enabled | Solid green |
-| Active, muted | Solid amber |
-| Inactive (either state) | Off |
+| Active | Solid green |
+| Inactive, standard | Off |
+| Inactive, sequencer | *TBD — see open questions* |
 
 ## Sequencer model
 
@@ -67,13 +74,14 @@ Edit arms the active channel only; the other three keep playing or resting as al
 
 ## Playback
 
-One shared 16-step clock drives all four lanes at the pot's tempo. On each step, an enabled lane plays its chord, holds through any following ties, and goes silent on a rest. A muted lane is skipped entirely. **Play / Pause** starts and stops the clock for every lane at once — there is no per-channel transport.
+One shared 16-step clock drives every channel in sequencer mode — step 1 fires for all of them together, then step 2, and so on, never independently. On each step, a sequencer-mode channel plays its chord, holds through any following ties, and goes silent on a rest. A channel left in standard mode takes no part in playback. **Play / Pause** starts and stops the shared clock for every sequencer-mode channel at once — there is no per-channel transport.
 
 ## Open questions
 
 - **Chord size cap** — how many simultaneous notes should a step be allowed to hold, is there a polyphony limit worth enforcing on the record side?
 - **Play restart vs. resume** — does pressing Play always restart the clock at step 1, or resume from wherever it was paused?
 - **Edit while playing** — can Edit be armed while the clock is running (punch-in over live playback), or only while stopped?
-- **Muting a sounding note** — if a channel is muted mid-note, does the note cut immediately or ring out?
 - **Velocity** — does a recorded chord keep the velocity it was played at, or get a fixed value?
 - **Tie on step 1** — a tie with nothing before it has nothing to sustain, should it just behave like a rest?
+- **Switching a channel to standard mid-playback** — does its sounding note cut immediately or ring out?
+- **LED for an inactive sequencer-mode channel** — solid, dim, or blinking in time with the shared clock?
