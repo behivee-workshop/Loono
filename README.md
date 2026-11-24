@@ -55,7 +55,7 @@ Pressing the already-active channel button toggles it into sequencer mode instea
 
 ### Sequencer (not editing)
 
-Channel owns a 16-step lane that joins the shared clock; row 1 still picks the active channel.
+Channel owns a 16-step lane that joins the shared clock; row 1 still picks the active channel. A channel is either sequenced or played live, never both — while in sequencer mode its notes come only from its lane, and Keylab keys do not pass through on it (they only write steps, and only while editing).
 
 | D2 | D3 | D4 | D5 |
 |---|---|---|---|
@@ -79,7 +79,7 @@ Row 1 switches to step editing; row 2 keeps only exit and the clear actions. Ent
 |---|---|---|---|
 | — | Exit edit | Clear step | Clear all |
 
-Hold up to 4 Keylab keys at once — their note names show on the OLED while held — and release them all to commit that chord to the cursor and advance one step (wraps 16→1). **Skip** writes a rest and advances; **Tie** marks sustain-previous and advances; **Prev/Next** move the cursor without writing; **Clear step** rests the current step in place; **Clear all** rests the whole 16-step lane.
+Hold Keylab keys and release them all to commit that chord to the cursor and advance one step (wraps 16→1). The first 4 notes pressed are recorded; any held beyond that are ignored. Held note names show on the OLED as the chord builds. **Skip** writes a rest and advances; **Tie** marks sustain-previous and advances; **Prev/Next** move the cursor without writing; **Clear step** rests the current step in place; **Clear all** rests the whole 16-step lane.
 
 ## Open questions
 
