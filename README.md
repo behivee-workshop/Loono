@@ -38,7 +38,7 @@ Each channel is independently in one of two modes — this is per channel, not t
 - **Standard** — no lane. Notes played on the Keylab while this channel is active pass straight through on its MIDI channel, as today.
 - **Sequencer** — the channel's 16-step lane exists and joins the shared clock. Its own play/stopped state follows the global transport (see Playback below), not a per-channel one.
 
-Active channel selection and per-channel mode are independent: several channels can be in sequencer mode at once, and only one is "active" (the live-note / edit target) at a time.
+Active channel selection and per-channel mode are independent: several channels can be in sequencer mode at once, and only one is "active" (the live-note / edit target) at a time. For example: channel 1's lane plays on its own while channel 2 stays in standard mode and you play live over it, or both channel 1 and channel 2 can be in sequencer mode and play their lanes together in sync.
 
 | State | LED |
 |---|---|
