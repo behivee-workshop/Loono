@@ -20,11 +20,8 @@ flowchart LR
 
 | Pin | Function | Notes |
 |---|---|---|
-| `D2`–`D5` | Channel buttons 1–4 | Select active channel; second press on the active one toggles it between standard and sequencer mode. Repurposed while edit is armed — see [Edit navigation](#edit-navigation-d2d5-while-armed) |
-| `D6` | Play / Pause | Starts or stops the shared clock for all 4 lanes |
-| `D7` | Edit | Arms step recording on the active channel |
-| `D8` | Skip | Edit mode only — writes a rest, advances |
-| `D9` | Tie | Edit mode only — sustains previous step, advances |
+| `D2`–`D5` | Channel buttons 1–4 (row 1) | Function depends on mode — see [Button map by mode](#button-map-by-mode) |
+| `D6`–`D9` | Transport / edit buttons (row 2) | Function depends on mode — see [Button map by mode](#button-map-by-mode) |
 | `A0` | Tempo pot | 60–160 BPM, live while playing |
 | `RX` / `D0` | MIDI in | Opto-isolated DIN in from the Keylab, 31250 baud |
 | `TX` / `D1` | MIDI out | DIN out, daisy-chains to the synths |
@@ -33,9 +30,25 @@ flowchart LR
 
 ## Button map by mode
 
-Physical layout: `D2`–`D5` are the top row, `D6`–`D9` the bottom row.
+Physical layout: `D2`–`D5` are the top row, `D6`–`D9` the bottom row. There are three modes, and edit is a sub-mode reachable only from sequencer: **standard → sequencer → edit**.
 
 ### Standard mode
+
+The active channel has no lane; row 2 has nothing to do.
+
+| D2 | D3 | D4 | D5 |
+|---|---|---|---|
+| Select ch 1 | Select ch 2 | Select ch 3 | Select ch 4 |
+
+| D6 | D7 | D8 | D9 |
+|---|---|---|---|
+| — | — | — | — |
+
+Pressing the already-active channel button toggles it into sequencer mode instead of selecting it — see [Channel modes](#channel-modes).
+
+### Sequencer mode (active channel, not editing)
+
+Row 1 still selects/toggles channels; row 2 gains transport now that this channel has a lane.
 
 | D2 | D3 | D4 | D5 |
 |---|---|---|---|
@@ -45,26 +58,26 @@ Physical layout: `D2`–`D5` are the top row, `D6`–`D9` the bottom row.
 |---|---|---|---|
 | Play / Pause | Edit (arm) | — | — |
 
-Pressing the already-active channel button toggles it between standard and sequencer mode instead of selecting it — see [Channel modes](#channel-modes).
+### Edit mode (sub-mode of sequencer)
 
-### Edit mode (armed)
+Row 1 switches entirely to step editing; row 2 keeps only exit and the clear actions.
 
 | D2 | D3 | D4 | D5 |
 |---|---|---|---|
-| Step back | Step forward | Clear step | Clear channel |
+| Prev step | Next step | Skip | Tie |
 
 | D6 | D7 | D8 | D9 |
 |---|---|---|---|
-| Play / Pause* | Edit (exit) | Skip | Tie |
+| — | Exit edit | Clear step | Clear all |
 
-\* the shared clock is already stopped the moment Edit was pressed — see [Recording](#recording-edit-mode).
+The shared clock is already stopped the moment Edit was pressed — see [Recording](#recording-edit-mode).
 
 ## Channel modes
 
 Each channel is independently in one of two modes — this is per channel, not tied to which one is currently active:
 
-- **Standard** — no lane. Notes played on the Keylab while this channel is active pass straight through on its MIDI channel, as today.
-- **Sequencer** — the channel's 16-step lane exists and joins the shared clock. Its own play/stopped state follows the global transport (see Playback below), not a per-channel one.
+- **Standard** — no lane. Notes played on the Keylab while this channel is active pass straight through on its MIDI channel, as today. Row 2 (`D6`–`D9`) has no function.
+- **Sequencer** — the channel's 16-step lane exists and joins the shared clock. Its own play/stopped state follows the global transport (see Playback below), not a per-channel one. Row 2 gains Play/Pause and Edit; Edit is only reachable from here.
 
 Active channel selection and per-channel mode are independent: several channels can be in sequencer mode at once, and only one is "active" (the live-note / edit target) at a time. For example: channel 1's lane plays on its own while channel 2 stays in standard mode and you play live over it, or both channel 1 and channel 2 can be in sequencer mode and play their lanes together in sync.
 
@@ -94,22 +107,14 @@ Step 3's `G4` sustains through the two tied steps that follow it before the lane
 
 Edit arms the active channel only; the other three keep playing or resting as already programmed.
 
-1. Press **Edit** (`D7`) — this stops the shared clock if it was running, and arms the active channel's cursor at step 1, always, regardless of where playback last was. `D2`–`D5` stop selecting channels for as long as edit stays armed.
+1. With the active channel already in sequencer mode, press **Edit** (`D7`) — this stops the shared clock if it was running, and arms the cursor at step 1, always, regardless of where playback last was. `D2`–`D5` switch from channel select to step editing for as long as edit stays armed.
 2. Hold one or more keys on the Keylab. Any note pressed while at least one key is still down joins the same chord.
 3. Release the last held key — the chord commits to the current step and the cursor advances one step (wraps 16→1).
-4. **Skip** (`D8`) writes a rest at the cursor and advances, without touching the keyboard.
-5. **Tie** (`D9`) marks the cursor as sustain-previous and advances.
-
-### Edit navigation (`D2`–`D5` while armed)
-
-| Button | Action |
-|---|---|
-| `D2` | Step back — moves the cursor to the previous step, no write |
-| `D3` | Step forward — moves the cursor to the next step, no write |
-| `D4` | Clear step — sets the step at the cursor to rest; cursor does not move |
-| `D5` | Clear channel — wipes all 16 steps on this channel to rest; cursor stays put |
-
-`D7` (Edit) is still the only way in or out of edit mode — pressing it again disarms and returns `D2`–`D5` to channel select.
+4. **Skip** (`D4`) writes a rest at the cursor and advances, without touching the keyboard.
+5. **Tie** (`D5`) marks the cursor as sustain-previous and advances.
+6. **Prev** (`D2`) / **Next** (`D3`) move the cursor back or forward without writing anything, to review or retarget a step.
+7. **Clear step** (`D8`) sets the step at the cursor to rest; the cursor does not move. **Clear all** (`D9`) wipes all 16 steps on this channel to rest.
+8. **Exit edit** (`D7`) disarms edit mode and returns `D2`–`D5` to channel select.
 
 ## Playback
 
