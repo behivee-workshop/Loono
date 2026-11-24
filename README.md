@@ -66,7 +66,7 @@ Step 3's `G4` sustains through the two tied steps that follow it before the lane
 
 Edit arms the active channel only; the other three keep playing or resting as already programmed.
 
-1. Press **Edit** (`D7`) — the active channel's cursor is armed at its current step, shown on the OLED. `D2`–`D5` stop selecting channels for as long as edit stays armed.
+1. Press **Edit** (`D7`) — this stops the shared clock if it was running, and arms the active channel's cursor at step 1, always, regardless of where playback last was. `D2`–`D5` stop selecting channels for as long as edit stays armed.
 2. Hold one or more keys on the Keylab. Any note pressed while at least one key is still down joins the same chord.
 3. Release the last held key — the chord commits to the current step and the cursor advances one step (wraps 16→1).
 4. **Skip** (`D8`) writes a rest at the cursor and advances, without touching the keyboard.
@@ -91,7 +91,6 @@ One shared 16-step clock drives every channel in sequencer mode — step 1 fires
 
 - **Chord size cap** — how many simultaneous notes should a step be allowed to hold, is there a polyphony limit worth enforcing on the record side?
 - **Play restart vs. resume** — does pressing Play always restart the clock at step 1, or resume from wherever it was paused?
-- **Edit while playing** — can Edit be armed while the clock is running (punch-in over live playback), or only while stopped?
 - **Velocity** — does a recorded chord keep the velocity it was played at, or get a fixed value?
 - **Tie on step 1** — a tie with nothing before it has nothing to sustain, should it just behave like a rest?
 - **Switching a channel to standard mid-playback** — does its sounding note cut immediately or ring out?
