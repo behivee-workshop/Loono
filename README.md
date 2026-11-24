@@ -26,16 +26,17 @@ Remapping happens per message, using whichever channel is active right then — 
 | `A0` | Tempo pot | 60–160 BPM, live while playing |
 | `RX` / `D0` | MIDI in | Opto-isolated DIN in from the Keylab, 31250 baud |
 | `TX` / `D1` | MIDI out | DIN out, daisy-chains to the synths |
-| `SDA` / `SCL` | OLED | 128×64 SSD1306, I2C — shows channel, BPM, mode, step position (`05/16`), and note names while editing |
+| `SDA` / `SCL` | OLED | 128×64 SSD1306, I2C — shows channel, BPM, transport + step (`Play. 05`), and note names while editing |
 | `D11` | NeoPixel ×4 | One LED per channel, mirrors active/mode state |
 
 | LED state | Appearance |
 |---|---|
-| Active channel | Solid green |
-| Inactive, sequencer | Dim white |
+| Active, standard | Green |
+| Active, sequencer | Violet |
+| Inactive, sequencer | Dim violet |
 | Inactive, standard | Off |
 
-The active channel's own mode is read off the OLED rather than its LED.
+Colour carries the mode, so the OLED doesn't repeat it — the screen shows channel, BPM, and transport/step instead: `Play. 05`, `Pause 05`, or `Edit 03` with the held note names beneath while a chord is being built.
 
 ## Button map by mode
 

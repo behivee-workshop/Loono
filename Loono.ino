@@ -41,10 +41,16 @@ Adafruit_NeoPixel pixels(NEOPIXEL_COUNT, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 #define GATE_PCT_FAST 90  // 120 BPM and up
 #define GATE_SPLIT_BPM 120
 
+// Pot is sampled on an interval so the IIR actually smooths, then held in a
+// deadband so ADC jitter can't flicker the BPM (which would also thrash the
+// display and wobble the step length). Both are tuning values.
+#define POT_INTERVAL_US 5000
+#define POT_DEADBAND 4
+
 // Full-frame OLED refresh is ~25ms at 400kHz, so it must never land on a step
 // boundary (94ms at 160 BPM). Throttled, and skipped near the next step.
-#define DISPLAY_MIN_INTERVAL 120
-#define DISPLAY_STEP_GUARD 40
+#define DISPLAY_MIN_INTERVAL_US 120000
+#define DISPLAY_STEP_GUARD_US 40000
 
 enum StepType : uint8_t { STEP_REST, STEP_CHORD, STEP_TIE };
 
@@ -60,7 +66,8 @@ struct Channel {
   Step steps[NUM_STEPS];
   uint8_t soundCount;              // notes currently ringing from this lane
   uint8_t soundNotes[MAX_CHORD];
-  uint32_t gateDeadline;           // 0 = no cut scheduled (note rides into a tie)
+  bool gateArmed;                  // false = note rides on into a tie
+  uint32_t gateDeadline;           // micros
 };
 
 Channel chans[NUM_CH];
@@ -69,13 +76,13 @@ bool editing = false;
 bool playing = false;
 uint8_t playStep = 0;
 uint8_t editCursor = 0;
-uint32_t stepStart = 0;
+uint32_t stepStart = 0;  // micros
 uint16_t bpm = 100;
 
-// Live-key tracking. Recording keeps the first MAX_CHORD notes of a press;
-// the chord commits when the last key comes up.
+// Live-key tracking, used only while editing: a chord commits once every note
+// it recorded has been released. Deliberately independent of any other held
+// key, so a 5th note or a phantom NoteOn can't wedge recording.
 bool keyHeld[128];
-uint8_t heldCount = 0;
 uint8_t recNotes[MAX_CHORD];
 uint8_t recVels[MAX_CHORD];
 uint8_t recCount = 0;
@@ -91,11 +98,13 @@ uint32_t potAccum = 0;
 
 const char *NOTE_NAMES[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 
-uint32_t stepMs() { return 60000UL / bpm / 4; }
+// Microseconds, not millis: at 160 BPM a step is 93.75ms, and truncating that
+// to 93ms runs the tempo ~0.8% fast and drifts the grid.
+uint32_t stepUs() { return 15000000UL / bpm; }
 
-uint32_t gateMs() {
+uint32_t gateUs() {
   uint8_t pct = (bpm >= GATE_SPLIT_BPM) ? GATE_PCT_FAST : GATE_PCT_SLOW;
-  return stepMs() * pct / 100;
+  return stepUs() / 100 * pct;
 }
 
 // A tie at step 1 has nothing before it to sustain, so it plays as a rest.
@@ -110,13 +119,17 @@ void stopSounding(uint8_t c) {
     MIDI.sendNoteOff(chans[c].soundNotes[i], 0, c + 1);
   }
   chans[c].soundCount = 0;
-  chans[c].gateDeadline = 0;
+  chans[c].gateArmed = false;
 }
 
 void setChannelMode(uint8_t c, bool sequencer) {
   if (chans[c].sequencer == sequencer) return;
   chans[c].sequencer = sequencer;
-  if (!sequencer) {
+  if (sequencer) {
+    // A key held across this toggle would never get its note off forwarded,
+    // because sequencer channels don't pass live notes. Clear it now.
+    MIDI.sendControlChange(123, 0, c + 1);
+  } else {
     stopSounding(c);  // nothing left stranded without a lane to end it
     if (c == active) editing = false;
   }
@@ -146,7 +159,6 @@ void fireStep() {
 
     // A following tie must not be cut off by this step's gate.
     bool nextTies = (effectiveType(c, nextIdx) == STEP_TIE);
-    uint32_t deadline = nextTies ? 0 : stepStart + gateMs();
 
     if (type == STEP_CHORD) {
       stopSounding(c);
@@ -155,9 +167,15 @@ void fireStep() {
         chans[c].soundNotes[i] = s.notes[i];
       }
       chans[c].soundCount = s.count;
-      chans[c].gateDeadline = deadline;
+      if (s.count && !nextTies) {
+        chans[c].gateDeadline = stepStart + gateUs();
+        chans[c].gateArmed = true;
+      }
     } else if (type == STEP_TIE) {
-      if (chans[c].soundCount) chans[c].gateDeadline = deadline;
+      if (chans[c].soundCount && !nextTies) {
+        chans[c].gateDeadline = stepStart + gateUs();
+        chans[c].gateArmed = true;
+      }
     } else {
       stopSounding(c);
     }
@@ -166,16 +184,16 @@ void fireStep() {
 
 void startClock() {
   playing = true;
-  stepStart = millis();
+  stepStart = micros();
   fireStep();
   displayDirty = true;
 }
 
 void advanceClock(uint32_t now) {
-  uint32_t sm = stepMs();
-  if (now - stepStart < sm) return;
-  stepStart += sm;
-  if (now - stepStart >= sm * 2) stepStart = now;  // resync if we fell behind
+  uint32_t su = stepUs();
+  if (now - stepStart < su) return;
+  stepStart += su;  // accumulate, so the grid doesn't drift with loop jitter
+  if (now - stepStart >= su * 2) stepStart = now;  // resync if we fell behind
   playStep = (playStep + 1) % NUM_STEPS;
   fireStep();
   displayDirty = true;
@@ -183,7 +201,7 @@ void advanceClock(uint32_t now) {
 
 void updateGates(uint32_t now) {
   for (uint8_t c = 0; c < NUM_CH; c++) {
-    if (chans[c].gateDeadline && (int32_t)(now - chans[c].gateDeadline) >= 0) {
+    if (chans[c].gateArmed && (int32_t)(now - chans[c].gateDeadline) >= 0) {
       stopSounding(c);
     }
   }
@@ -224,21 +242,19 @@ void enterEdit() {
   editing = true;
   editCursor = 0;
   recCount = 0;
+  memset(keyHeld, 0, sizeof(keyHeld));  // drop stale holds from before edit
   displayDirty = true;
 }
 
 void noteOn(uint8_t note, uint8_t vel) {
-  if (keyHeld[note]) return;
-  keyHeld[note] = true;
-  heldCount++;
-
   if (editing) {
-    if (recCount < MAX_CHORD) {  // first 4 pressed win, extras ignored
+    if (!keyHeld[note] && recCount < MAX_CHORD) {  // first 4 win, extras ignored
       recNotes[recCount] = note;
-      recVels[recCount] = vel;
+      recVels[recCount] = vel;  // chords keep the velocity they were played at
       recCount++;
       displayDirty = true;
     }
+    keyHeld[note] = true;
   } else if (!chans[active].sequencer) {
     MIDI.sendNoteOn(note, vel, active + 1);
   }
@@ -246,12 +262,13 @@ void noteOn(uint8_t note, uint8_t vel) {
 }
 
 void noteOff(uint8_t note) {
-  if (!keyHeld[note]) return;
-  keyHeld[note] = false;
-  if (heldCount) heldCount--;
-
   if (editing) {
-    if (heldCount == 0 && recCount > 0) commitChord();
+    keyHeld[note] = false;
+    if (!recCount) return;
+    for (uint8_t i = 0; i < recCount; i++) {
+      if (keyHeld[recNotes[i]]) return;  // chord still being held
+    }
+    commitChord();
   } else if (!chans[active].sequencer) {
     // Uses whichever channel is active right now — this is what lets a held
     // note keep sounding on the channel you switched away from.
@@ -269,7 +286,9 @@ void readMidi() {
     } else if (type == midi::NoteOff || (type == midi::NoteOn && d2 == 0)) {
       noteOff(d1);
     } else {
-      MIDI.send(type, d1, d2, MIDI.getChannel());  // CC, bend, clock: untouched
+      // CC, bend, program change, aftertouch keep their incoming channel;
+      // the library routes real-time (clock/start/stop) on its own.
+      MIDI.send(type, d1, d2, MIDI.getChannel());
     }
   }
 }
@@ -303,9 +322,21 @@ void handleButton(uint8_t i) {
   }
 }
 
-void readPot() {
+void readPot(uint32_t now) {
+  static uint32_t lastSample = 0;
+  static uint16_t lastFiltered = 0xFFFF;
+  if (now - lastSample < POT_INTERVAL_US) return;
+  lastSample = now;
+
   potAccum = potAccum - (potAccum >> 3) + analogRead(POT_PIN);
-  uint16_t next = map(potAccum >> 3, 0, 1023, BPM_MIN, BPM_MAX);
+  uint16_t filtered = potAccum >> 3;
+  if (lastFiltered != 0xFFFF) {
+    int16_t drift = (int16_t)filtered - (int16_t)lastFiltered;
+    if (drift < POT_DEADBAND && drift > -POT_DEADBAND) return;
+  }
+  lastFiltered = filtered;
+
+  uint16_t next = map(filtered, 0, 1023, BPM_MIN, BPM_MAX);
   if (next != bpm) {
     bpm = next;
     displayDirty = true;
@@ -313,17 +344,27 @@ void readPot() {
 }
 
 void updateLeds() {
+  bool changed = false;
   for (uint8_t c = 0; c < NUM_CH; c++) {
     uint32_t color;
-    if (c == active) color = pixels.Color(0, 20, 0);          // solid green
-    else if (chans[c].sequencer) color = pixels.Color(5, 5, 5);  // dim white
-    else color = 0;
+    if (c == active) {
+      color = chans[c].sequencer ? pixels.Color(12, 0, 24)   // violet
+                                 : pixels.Color(0, 20, 0);   // green
+    } else {
+      color = chans[c].sequencer ? pixels.Color(3, 0, 6) : 0; // dim violet / off
+    }
     if (color != ledCache[c]) {
       ledCache[c] = color;
       pixels.setPixelColor(c, color);
-      pixels.show();
+      changed = true;
     }
   }
+  if (changed) pixels.show();
+}
+
+void printStepNum(uint8_t n) {
+  if (n < 10) display.print('0');  // always two digits: 01 .. 16
+  display.print(n);
 }
 
 void printNoteName(uint8_t note) {
@@ -335,11 +376,11 @@ void printNoteName(uint8_t note) {
 // writes if the throttle + step guard below ever proves too coarse.
 void updateDisplay(uint32_t now) {
   if (!displayDirty) return;
-  if (now - lastDraw < DISPLAY_MIN_INTERVAL) return;
+  if (now - lastDraw < DISPLAY_MIN_INTERVAL_US) return;
   if (playing) {
     uint32_t elapsed = now - stepStart;
-    uint32_t sm = stepMs();
-    if (sm > elapsed && sm - elapsed < DISPLAY_STEP_GUARD) return;  // step imminent
+    uint32_t su = stepUs();
+    if (su > elapsed && su - elapsed < DISPLAY_STEP_GUARD_US) return;  // step imminent
   }
 
   display.clearDisplay();
@@ -353,27 +394,19 @@ void updateDisplay(uint32_t now) {
   display.print(bpm);
   display.print(" BPM");
 
+  // Mode is read off the LED colors, so the screen carries transport + step.
   display.setTextSize(2);
   display.setCursor(0, 20);
-  if (editing) display.print("EDIT");
-  else if (chans[active].sequencer) display.print(playing ? "PLAY" : "SEQ");
-  else display.print("STD");
-
-  display.setTextSize(1);
-  display.setCursor(0, 42);
   if (editing) {
-    display.print("step ");
-    display.print(editCursor + 1);
-    display.print("/");
-    display.print(NUM_STEPS);
-  } else if (playing) {
-    display.print("step ");
-    display.print(playStep + 1);
-    display.print("/");
-    display.print(NUM_STEPS);
+    display.print("Edit ");
+    printStepNum(editCursor + 1);
+  } else if (chans[active].sequencer) {
+    display.print(playing ? "Play. " : "Pause ");
+    printStepNum(playStep + 1);
   }
 
   if (editing && recCount) {
+    display.setTextSize(1);
     display.setCursor(0, 54);
     for (uint8_t i = 0; i < recCount; i++) {
       if (i) display.print(" ");
@@ -406,12 +439,12 @@ void stCheck(const char *name, long got, long want) {
 void selftest() {
   stFails = 0;
 
-  bpm = 60;  stCheck("stepMs@60", stepMs(), 250);
-  bpm = 120; stCheck("stepMs@120", stepMs(), 125);
-  bpm = 160; stCheck("stepMs@160", stepMs(), 93);
+  bpm = 60;  stCheck("stepUs@60", stepUs(), 250000);
+  bpm = 120; stCheck("stepUs@120", stepUs(), 125000);
+  bpm = 160; stCheck("stepUs@160 keeps .75ms", stepUs(), 93750);
 
-  bpm = 100; stCheck("gate@100 slow 70pct", gateMs(), 105);
-  bpm = 120; stCheck("gate@120 fast 90pct", gateMs(), 112);
+  bpm = 100; stCheck("gate@100 slow 70pct", gateUs(), 105000);
+  bpm = 120; stCheck("gate@120 fast 90pct", gateUs(), 112500);
 
   clearChannel(0);
   stCheck("cleared step is rest", chans[0].steps[3].type, STEP_REST);
@@ -429,25 +462,56 @@ void selftest() {
   chans[0].steps[2].notes[0] = 60;
   chans[0].steps[3].type = STEP_TIE;
   playStep = 2;
-  stepStart = millis();
+  stepStart = micros();
   fireStep();
-  stCheck("chord before tie rides (no gate)", chans[0].gateDeadline, 0);
+  stCheck("chord before tie rides", chans[0].gateArmed, 0);
   stCheck("chord is sounding", chans[0].soundCount, 1);
 
   playStep = 3;  // the tie itself ends the chain and takes the gate
-  stepStart = millis();
+  stepStart = micros();
   fireStep();
   stCheck("tie still sounding", chans[0].soundCount, 1);
-  stCheck("tie schedules the cut", chans[0].gateDeadline != 0, 1);
+  stCheck("tie arms the cut", chans[0].gateArmed, 1);
 
   playStep = 4;  // rest clears it
-  stepStart = millis();
+  stepStart = micros();
   fireStep();
   stCheck("rest silences lane", chans[0].soundCount, 0);
 
+  // An empty chord step must not arm a gate with nothing to cut.
+  clearChannel(0);
+  chans[0].steps[1].type = STEP_CHORD;
+  chans[0].steps[1].count = 0;
+  playStep = 1;
+  stepStart = micros();
+  fireStep();
+  stCheck("empty chord arms nothing", chans[0].gateArmed, 0);
+
+  // Recording: 5th note ignored, chord commits only when its own notes drop.
+  clearChannel(0);
+  editing = true;
+  editCursor = 0;
+  recCount = 0;
+  memset(keyHeld, 0, sizeof(keyHeld));
+  noteOn(60, 100); noteOn(64, 90); noteOn(67, 80); noteOn(72, 70);
+  noteOn(76, 60);  // 5th, must be dropped
+  stCheck("chord caps at 4", recCount, 4);
+  noteOff(60); noteOff(64); noteOff(67);
+  stCheck("no commit while held", chans[0].steps[0].type, STEP_REST);
+  noteOff(72);
+  stCheck("commits on last release", chans[0].steps[0].type, STEP_CHORD);
+  stCheck("commit kept 4 notes", chans[0].steps[0].count, 4);
+  stCheck("commit kept velocity", chans[0].steps[0].vels[1], 90);
+  stCheck("cursor advanced", editCursor, 1);
+  noteOff(76);  // stray release of the ignored note must not re-commit
+  stCheck("stray release is inert", editCursor, 1);
+
+  editing = false;
   clearChannel(0);
   chans[0].sequencer = false;
   playStep = 0;
+  recCount = 0;
+  memset(keyHeld, 0, sizeof(keyHeld));
   bpm = 100;
 
   Serial.print("LOONO SELFTEST ");
@@ -501,7 +565,7 @@ void loop() {
 
   readMidi();  // MIDI first, always — nothing below it may block
 
-  uint32_t now = millis();
+  uint32_t now = micros();
   if (playing) advanceClock(now);
   updateGates(now);
 
@@ -510,7 +574,7 @@ void loop() {
     if (buttons[i].fell()) handleButton(i);
   }
 
-  readPot();
+  readPot(now);
   updateLeds();
   updateDisplay(now);
 }
