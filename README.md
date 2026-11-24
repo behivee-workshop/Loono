@@ -24,7 +24,7 @@ flowchart LR
 | `A0` | Tempo pot | 60–160 BPM, live while playing |
 | `RX` / `D0` | MIDI in | Opto-isolated DIN in from the Keylab, 31250 baud |
 | `TX` / `D1` | MIDI out | DIN out, daisy-chains to the synths |
-| `SDA` / `SCL` | OLED | 128×64 SSD1306, I2C |
+| `SDA` / `SCL` | OLED | 128×64 SSD1306, I2C — shows channel, BPM, mode, and note names while editing |
 | `D11` | NeoPixel ×4 | One LED per channel, mirrors active/mode state |
 
 | LED state | Appearance |
@@ -77,11 +77,10 @@ Row 1 switches to step editing; row 2 keeps only exit and the clear actions. Ent
 |---|---|---|---|
 | — | Exit edit | Clear step | Clear all |
 
-Hold one or more Keylab keys and release them all to commit that chord to the cursor and advance one step (wraps 16→1). **Skip** writes a rest and advances; **Tie** marks sustain-previous and advances; **Prev/Next** move the cursor without writing; **Clear step** rests the current step in place; **Clear all** rests the whole 16-step lane.
+Hold up to 4 Keylab keys at once — their note names show on the OLED while held — and release them all to commit that chord to the cursor and advance one step (wraps 16→1). **Skip** writes a rest and advances; **Tie** marks sustain-previous and advances; **Prev/Next** move the cursor without writing; **Clear step** rests the current step in place; **Clear all** rests the whole 16-step lane.
 
 ## Open questions
 
-- **Chord size cap** — how many simultaneous notes should a step be allowed to hold, is there a polyphony limit worth enforcing on the record side?
 - **Play restart vs. resume** — does pressing Play always restart the clock at step 1, or resume from wherever it was paused?
 - **Velocity** — does a recorded chord keep the velocity it was played at, or get a fixed value?
 - **Tie on step 1** — a tie with nothing before it has nothing to sustain, should it just behave like a rest?
