@@ -32,8 +32,10 @@ Remapping happens per message, using whichever channel is active right then — 
 | LED state | Appearance |
 |---|---|
 | Active channel | Solid green |
+| Inactive, sequencer | Dim white |
 | Inactive, standard | Off |
-| Inactive, sequencer | *TBD — see open questions* |
+
+The active channel's own mode is read off the OLED rather than its LED.
 
 ## Button map by mode
 
@@ -49,9 +51,9 @@ Active channel has no lane; Keylab notes pass straight through on its MIDI chann
 
 | D6 | D7 | D8 | D9 |
 |---|---|---|---|
-| — | — | — | — |
+| Play / Pause | — | — | — |
 
-Pressing the already-active channel button toggles it into sequencer mode instead of selecting it.
+Pressing the already-active channel button toggles it into sequencer mode instead of selecting it. Play/Pause is global — it stays live in every mode so lanes can be started and stopped without leaving the channel you're playing on.
 
 ### Sequencer (not editing)
 
@@ -65,7 +67,16 @@ Channel owns a 16-step lane that joins the shared clock; row 1 still picks the a
 |---|---|---|---|
 | Play / Pause | Edit (arm) | — | — |
 
-Play/Pause starts or stops one shared 16-step clock for every sequencer-mode channel at once (never per-channel) — step 1 fires for all of them together, then step 2, and so on. Each step is a **chord** (one or more notes), a **rest** (silence), or a **tie** (holds whatever the last chord was).
+Play/Pause starts or stops one shared 16-step clock for every sequencer-mode channel at once (never per-channel) — step 1 fires for all of them together, then step 2, and so on. Pause holds position; the next Play resumes from that step rather than restarting at 1. Each step is a **chord** (up to 4 notes), a **rest** (silence), or a **tie** (holds whatever the last chord was).
+
+A step is one 16th note: `60000 / BPM / 4` ms — 250 ms at 60 BPM down to 94 ms at 160 BPM. Chord gate length is tempo-dependent, since one fixed ratio doesn't suit both ends of the range:
+
+| Tempo | Gate | Why |
+|---|---|---|
+| Under 120 BPM | 70% of the step | Long steps get space between notes instead of smearing into each other |
+| 120 BPM and up | 90% of the step | Short steps stay audible, with just enough gap for repeated chords to retrigger |
+
+Both percentages are tuning constants — adjust by ear on the real synths.
 
 ### Edit (sub-mode of sequencer)
 
@@ -81,10 +92,17 @@ Row 1 switches to step editing; row 2 keeps only exit and the clear actions. Ent
 
 Hold Keylab keys and release them all to commit that chord to the cursor and advance one step (wraps 16→1). The first 4 notes pressed are recorded; any held beyond that are ignored. Held note names show on the OLED as the chord builds. **Skip** writes a rest and advances; **Tie** marks sustain-previous and advances; **Prev/Next** move the cursor without writing; **Clear step** rests the current step in place; **Clear all** rests the whole 16-step lane.
 
+## Timing constraints
+
+The previous build was abandoned over MIDI latency, skipped LED beats, and notes landing off-grid. Two rules exist to prevent a repeat:
+
+- **MIDI first, always.** Read and forward MIDI before any display or LED work in the loop, and never block it — no `delay()` outside `setup()`.
+- **Never redraw the full OLED on the step path.** A full 128×64 SSD1306 frame over I2C costs roughly 25 ms; a step at 160 BPM is 94 ms. Redraw only the small rect that changed, and throttle updates independently of the step clock.
+
 ## Open questions
 
-- **Play restart vs. resume** — does pressing Play always restart the clock at step 1, or resume from wherever it was paused?
 - **Velocity** — does a recorded chord keep the velocity it was played at, or get a fixed value?
 - **Tie on step 1** — a tie with nothing before it has nothing to sustain, should it just behave like a rest?
 - **Switching a channel to standard mid-playback** — does its sounding note cut immediately or ring out?
-- **LED for an inactive sequencer-mode channel** — solid, dim, or blinking in time with the shared clock?
+- **Startup state** — which channel is active at power-on, and do all four start in standard mode?
+- **OLED step readout** — should it show the current step position (`05/16`) during playback and editing?
