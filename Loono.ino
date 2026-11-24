@@ -52,6 +52,11 @@ Adafruit_NeoPixel pixels(NEOPIXEL_COUNT, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 #define DISPLAY_MIN_INTERVAL_US 120000
 #define DISPLAY_STEP_GUARD_US 40000
 
+// How long an audition of a step rings when you arrive on it, and how long a
+// "cleared" confirmation stays on screen. Both tuning values.
+#define PREVIEW_US 350000
+#define TOAST_US 1000000
+
 enum StepType : uint8_t { STEP_REST, STEP_CHORD, STEP_TIE };
 
 struct Step {
@@ -93,6 +98,8 @@ Bounce buttons[NUM_BUTTONS];
 
 bool displayDirty = true;
 uint32_t lastDraw = 0;
+const char *toastMsg = nullptr;  // brief confirmation line, e.g. "Step cleared"
+uint32_t toastUntil = 0;
 uint32_t ledCache[NUM_CH] = {1, 1, 1, 1};  // impossible value forces first show
 uint32_t potAccum = 0;
 
@@ -207,12 +214,38 @@ void updateGates(uint32_t now) {
   }
 }
 
+void toast(const char *msg) {
+  toastMsg = msg;
+  toastUntil = micros() + TOAST_US;
+  displayDirty = true;
+}
+
+// Arriving on a step sounds whatever it holds, so the arrows double as a way to
+// audition a prepared lane and stop on the step you want to replace.
+void previewStep() {
+  Step &s = chans[active].steps[editCursor];
+  stopSounding(active);
+  if (s.type != STEP_CHORD || !s.count) return;
+  for (uint8_t i = 0; i < s.count; i++) {
+    MIDI.sendNoteOn(s.notes[i], s.vels[i], active + 1);
+    chans[active].soundNotes[i] = s.notes[i];
+  }
+  chans[active].soundCount = s.count;
+  chans[active].gateDeadline = micros() + PREVIEW_US;
+  chans[active].gateArmed = true;
+}
+
+void moveCursor(int8_t delta) {
+  editCursor = (editCursor + NUM_STEPS + delta) % NUM_STEPS;
+  previewStep();
+  displayDirty = true;
+}
+
 void writeStep(uint8_t type) {
   Step &s = chans[active].steps[editCursor];
   s.type = type;
   s.count = 0;
-  editCursor = (editCursor + 1) % NUM_STEPS;
-  displayDirty = true;
+  moveCursor(1);
 }
 
 void commitChord() {
@@ -224,8 +257,7 @@ void commitChord() {
     s.vels[i] = recVels[i];
   }
   recCount = 0;
-  editCursor = (editCursor + 1) % NUM_STEPS;
-  displayDirty = true;
+  moveCursor(1);
 }
 
 void clearChannel(uint8_t c) {
@@ -243,18 +275,22 @@ void enterEdit() {
   editCursor = 0;
   recCount = 0;
   memset(keyHeld, 0, sizeof(keyHeld));  // drop stale holds from before edit
+  previewStep();
   displayDirty = true;
 }
 
 void noteOn(uint8_t note, uint8_t vel) {
   if (editing) {
-    if (!keyHeld[note] && recCount < MAX_CHORD) {  // first 4 win, extras ignored
-      recNotes[recCount] = note;
-      recVels[recCount] = vel;  // chords keep the velocity they were played at
-      recCount++;
+    if (!keyHeld[note]) {
+      if (recCount < MAX_CHORD) {  // first 4 win, extras only sound
+        recNotes[recCount] = note;
+        recVels[recCount] = vel;  // chords keep the velocity they were played at
+        recCount++;
+      }
+      keyHeld[note] = true;
       displayDirty = true;
     }
-    keyHeld[note] = true;
+    MIDI.sendNoteOn(note, vel, active + 1);  // audition: hear what you record
   } else if (!chans[active].sequencer) {
     MIDI.sendNoteOn(note, vel, active + 1);
   }
@@ -263,6 +299,8 @@ void noteOn(uint8_t note, uint8_t vel) {
 
 void noteOff(uint8_t note) {
   if (editing) {
+    MIDI.sendNoteOff(note, 0, active + 1);  // end the audition
+    if (!keyHeld[note]) return;
     keyHeld[note] = false;
     if (!recCount) return;
     for (uint8_t i = 0; i < recCount; i++) {
@@ -296,15 +334,17 @@ void readMidi() {
 void handleButton(uint8_t i) {
   if (editing) {
     switch (i) {
-      case 0: editCursor = (editCursor + NUM_STEPS - 1) % NUM_STEPS; displayDirty = true; break;
-      case 1: editCursor = (editCursor + 1) % NUM_STEPS; displayDirty = true; break;
+      case 0: moveCursor(-1); break;
+      case 1: moveCursor(1); break;
       case 2: writeStep(STEP_REST); break;   // skip
       case 3: writeStep(STEP_TIE); break;    // tie
-      case 5: editing = false; displayDirty = true; break;
+      case 5: editing = false; stopSounding(active); displayDirty = true; break;
       case 6: chans[active].steps[editCursor].type = STEP_REST;
               chans[active].steps[editCursor].count = 0;
-              displayDirty = true; break;
-      case 7: clearChannel(active); break;
+              stopSounding(active);
+              toast("Step cleared");
+              break;
+      case 7: clearChannel(active); toast("All cleared"); break;
     }
     return;
   }
@@ -410,12 +450,31 @@ void updateDisplay(uint32_t now) {
     printStepNum(active + 1);
   }
 
-  if (editing && recCount) {
+  if (toastMsg) {
     display.setTextSize(1);
-    display.setCursor(0, 54);
-    for (uint8_t i = 0; i < recCount; i++) {
-      if (i) display.print(" ");
-      printNoteName(recNotes[i]);
+    display.setCursor(0, 50);
+    display.print(toastMsg);
+  } else if (editing) {
+    // Held keys while building a chord, otherwise what the step already holds.
+    display.setTextSize(1);
+    display.setCursor(0, 50);
+    if (recCount) {
+      for (uint8_t i = 0; i < recCount; i++) {
+        if (i) display.print(" ");
+        printNoteName(recNotes[i]);
+      }
+    } else {
+      Step &s = chans[active].steps[editCursor];
+      if (s.type == STEP_TIE) {
+        display.print("Tie");
+      } else if (s.type == STEP_CHORD && s.count) {
+        for (uint8_t i = 0; i < s.count; i++) {
+          if (i) display.print(" ");
+          printNoteName(s.notes[i]);
+        }
+      } else {
+        display.print("Skip");
+      }
     }
   }
 
@@ -544,9 +603,12 @@ void setup() {
   Wire.setClock(400000);
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
-  display.setTextSize(1);
-  display.setCursor(0, 0);
-  display.println("Loono");
+  display.setTextSize(3);
+  int16_t bx, by;
+  uint16_t bw, bh;
+  display.getTextBounds("Loono", 0, 0, &bx, &by, &bw, &bh);
+  display.setCursor((SCREEN_WIDTH - bw) / 2 - bx, (SCREEN_HEIGHT - bh) / 2 - by);
+  display.print("Loono");
   display.display();
   delay(2000);  // splash; the only delay() in the sketch
 
@@ -573,6 +635,11 @@ void loop() {
   uint32_t now = micros();
   if (playing) advanceClock(now);
   updateGates(now);
+
+  if (toastMsg && (int32_t)(now - toastUntil) >= 0) {
+    toastMsg = nullptr;
+    displayDirty = true;
+  }
 
   for (uint8_t i = 0; i < NUM_BUTTONS; i++) {
     buttons[i].update();

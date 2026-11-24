@@ -58,7 +58,7 @@ Pressing the already-active channel button toggles it into sequencer mode instea
 
 ### Sequencer (not editing)
 
-Channel owns a 16-step lane that joins the shared clock; row 1 still picks the active channel. A channel is either sequenced or played live, never both — while in sequencer mode its notes come only from its lane, and Keylab keys do not pass through on it (they only write steps, and only while editing).
+Channel owns a 16-step lane that joins the shared clock; row 1 still picks the active channel. A channel is either sequenced or played live, never both — while in sequencer mode its notes come only from its lane, and Keylab keys do not pass through on it. The exception is edit mode, where keys sound so you can hear what you're recording.
 
 | D2 | D3 | D4 | D5 |
 |---|---|---|---|
@@ -93,7 +93,13 @@ Row 1 switches to step editing; row 2 keeps only exit and the clear actions. Ent
 |---|---|---|---|
 | — | Exit edit | Clear step | Clear all |
 
-Hold Keylab keys and release them all to commit that chord to the cursor and advance one step (wraps 16→1). The first 4 notes pressed are recorded; any held beyond that are ignored. Held note names show on the OLED as the chord builds. **Skip** writes a rest and advances; **Tie** marks sustain-previous and advances; **Prev/Next** move the cursor without writing; **Clear step** rests the current step in place; **Clear all** rests the whole 16-step lane.
+Hold Keylab keys and release them all to commit that chord to the cursor and advance one step (wraps 16→1). The first 4 notes pressed are recorded; any held beyond that sound but are not stored. **Skip** writes a rest and advances; **Tie** marks sustain-previous and advances; **Prev/Next** move the cursor without writing; **Clear step** rests the current step in place; **Clear all** rests the whole 16-step lane. Either clear shows a one-second `Step cleared` / `All cleared` confirmation.
+
+Editing is audible, which is what makes the lane reviewable:
+
+- Keys you play sound on the channel as you press them, so you hear what you're about to record.
+- **Arriving** on a step — by arrow, or by the auto-advance after a commit, skip or tie — sounds whatever that step already holds. So the arrows walk and audition a prepared lane; stop on a step you don't like and play new keys to replace it.
+- The OLED shows the current step's contents: its note names, `Tie`, or `Skip`. While keys are held it shows the chord being built instead.
 
 ## Timing constraints
 
@@ -104,4 +110,4 @@ The previous build was abandoned over MIDI latency, skipped LED beats, and notes
 
 ## Startup state
 
-Channel 1 active, all four channels in standard mode, clock stopped — straight passthrough on boot, with sequencing opted into deliberately. Lanes are session-only: patterns are not saved and are lost at power-off.
+A two-second `Loono` splash, centred on the screen, then: channel 1 active, all four channels in standard mode, clock stopped — straight passthrough on boot, with sequencing opted into deliberately. Lanes are session-only: patterns are not saved and are lost at power-off.
