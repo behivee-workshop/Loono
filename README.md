@@ -26,7 +26,7 @@ Remapping happens per message, using whichever channel is active right then — 
 | `A0` | Tempo pot | 60–160 BPM, live while playing |
 | `RX` / `D0` | MIDI in | Opto-isolated DIN in from the Keylab, 31250 baud |
 | `TX` / `D1` | MIDI out | DIN out, daisy-chains to the synths |
-| `SDA` / `SCL` | OLED | 128×64 SSD1306, I2C — shows channel, BPM, mode, and note names while editing |
+| `SDA` / `SCL` | OLED | 128×64 SSD1306, I2C — shows channel, BPM, mode, step position (`05/16`), and note names while editing |
 | `D11` | NeoPixel ×4 | One LED per channel, mirrors active/mode state |
 
 | LED state | Appearance |
@@ -78,7 +78,7 @@ A step is one 16th note: `60000 / BPM / 4` ms — 250 ms at 60 BPM down to 94 ms
 
 Both percentages are tuning constants — adjust by ear on the real synths.
 
-Each recorded note keeps the velocity it was played at. A tie on step 1 has nothing before it to sustain, so it plays as a rest.
+Each recorded note keeps the velocity it was played at. A tie on step 1 has nothing before it to sustain, so it plays as a rest. Toggling a channel back to standard cuts any note its lane is sounding immediately, so nothing is left stranded without a lane to end it.
 
 ### Edit (sub-mode of sequencer)
 
@@ -101,8 +101,6 @@ The previous build was abandoned over MIDI latency, skipped LED beats, and notes
 - **MIDI first, always.** Read and forward MIDI before any display or LED work in the loop, and never block it — no `delay()` outside `setup()`.
 - **Never redraw the full OLED on the step path.** A full 128×64 SSD1306 frame over I2C costs roughly 25 ms; a step at 160 BPM is 94 ms. Redraw only the small rect that changed, and throttle updates independently of the step clock.
 
-## Open questions
+## Startup state
 
-- **Switching a channel to standard mid-playback** — does its sounding note cut immediately or ring out?
-- **Startup state** — which channel is active at power-on, and do all four start in standard mode?
-- **OLED step readout** — should it show the current step position (`05/16`) during playback and editing?
+Channel 1 active, all four channels in standard mode, clock stopped — straight passthrough on boot, with sequencing opted into deliberately. Lanes are session-only: patterns are not saved and are lost at power-off.
