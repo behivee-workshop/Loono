@@ -41,6 +41,12 @@ void setMidiOutChannel(uint8_t channel) {
   pixels.clear();
   pixels.setPixelColor(channel - 1, pixels.Color(0, 20, 0));
   pixels.show();
+
+  display.fillRect(0, 0, 40, 8, SSD1306_BLACK);
+  display.setCursor(0, 0);
+  display.print("ch ");
+  display.print(channel);
+  display.display();
 }
 
 void setup() {
@@ -53,7 +59,6 @@ void setup() {
   MIDI.turnThruOff();
 
   pixels.begin();
-  setMidiOutChannel(midiOutChannel);
 
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   display.clearDisplay();
@@ -65,6 +70,8 @@ void setup() {
   delay(2000);
   display.clearDisplay();
   display.display();
+
+  setMidiOutChannel(midiOutChannel);
 }
 
 void loop() {
