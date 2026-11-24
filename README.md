@@ -16,7 +16,7 @@ flowchart LR
     LOONO -.-> OUT[OLED + NeoPixel ×4]
 ```
 
-Remapping happens per message, using whichever channel is active right then — so holding a key while switching channels sends that note's note-off on the new channel instead of the one it started on, letting the held note sustain independently on the channel you left. This quirk is kept deliberately; to stop it leaving a stuck note behind, switching *into* a channel sends an All Notes Off on it first, so anything stuck there from an earlier switch clears automatically instead of needing that same key pressed and released again.
+Remapping happens per message, using whichever channel is active right then — so holding a key while switching channels sends that note's note-off on the new channel instead of the one it started on, letting the held note sustain independently on the channel you left. This quirk is kept deliberately; to stop it leaving a stuck note behind, switching *into* a channel still in standard mode sends an All Notes Off on it first, so anything stuck there from an earlier switch clears automatically instead of needing that same key pressed and released again. Switching into a sequencer-mode channel skips this, so it never cuts a note the lane is legitimately sustaining through a tie.
 
 ## Pin map
 
