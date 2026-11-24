@@ -20,7 +20,7 @@ flowchart LR
 
 | Pin | Function | Notes |
 |---|---|---|
-| `D2`–`D5` | Channel buttons 1–4 | Select active channel; second press on the active one toggles it between standard and sequencer mode |
+| `D2`–`D5` | Channel buttons 1–4 | Select active channel; second press on the active one toggles it between standard and sequencer mode. Repurposed while edit is armed — see [Edit navigation](#edit-navigation-d2d5-while-armed) |
 | `D6` | Play / Pause | Starts or stops the shared clock for all 4 lanes |
 | `D7` | Edit | Arms step recording on the active channel |
 | `D8` | Skip | Edit mode only — writes a rest, advances |
@@ -66,11 +66,22 @@ Step 3's `G4` sustains through the two tied steps that follow it before the lane
 
 Edit arms the active channel only; the other three keep playing or resting as already programmed.
 
-1. Press **Edit** — the active channel's cursor is armed at its current step, shown on the OLED.
+1. Press **Edit** (`D7`) — the active channel's cursor is armed at its current step, shown on the OLED. `D2`–`D5` stop selecting channels for as long as edit stays armed.
 2. Hold one or more keys on the Keylab. Any note pressed while at least one key is still down joins the same chord.
 3. Release the last held key — the chord commits to the current step and the cursor advances one step (wraps 16→1).
-4. **Skip** writes a rest at the cursor and advances, without touching the keyboard.
-5. **Tie** marks the cursor as sustain-previous and advances.
+4. **Skip** (`D8`) writes a rest at the cursor and advances, without touching the keyboard.
+5. **Tie** (`D9`) marks the cursor as sustain-previous and advances.
+
+### Edit navigation (`D2`–`D5` while armed)
+
+| Button | Action |
+|---|---|
+| `D2` | Step back — moves the cursor to the previous step, no write |
+| `D3` | Step forward — moves the cursor to the next step, no write |
+| `D4` | Clear — sets the step at the cursor to rest; cursor does not move |
+| `D5` | Exit edit — disarms edit mode; `D2`–`D5` revert to channel select |
+
+`D7` (Edit) still arms and disarms edit mode on its own, same as before — `D5` is just the exit reachable from inside edit, since `D2`–`D5` no longer select channels while armed.
 
 ## Playback
 
