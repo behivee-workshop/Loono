@@ -78,6 +78,8 @@ A step is one 16th note: `60000 / BPM / 4` ms — 250 ms at 60 BPM down to 94 ms
 
 Both percentages are tuning constants — adjust by ear on the real synths.
 
+Each recorded note keeps the velocity it was played at. A tie on step 1 has nothing before it to sustain, so it plays as a rest.
+
 ### Edit (sub-mode of sequencer)
 
 Row 1 switches to step editing; row 2 keeps only exit and the clear actions. Entering edit always stops the clock and resets the cursor to step 1.
@@ -101,8 +103,6 @@ The previous build was abandoned over MIDI latency, skipped LED beats, and notes
 
 ## Open questions
 
-- **Velocity** — does a recorded chord keep the velocity it was played at, or get a fixed value?
-- **Tie on step 1** — a tie with nothing before it has nothing to sustain, should it just behave like a rest?
 - **Switching a channel to standard mid-playback** — does its sounding note cut immediately or ring out?
 - **Startup state** — which channel is active at power-on, and do all four start in standard mode?
 - **OLED step readout** — should it show the current step position (`05/16`) during playback and editing?
