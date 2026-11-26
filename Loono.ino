@@ -28,10 +28,11 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 #define NEOPIXEL_COUNT 4
 Adafruit_NeoPixel pixels(NEOPIXEL_COUNT, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
-#define POT_PIN A0
+#define POT_PIN A0      // BPM
+#define LEN_POT_PIN A1  // pattern length
 
 #define NUM_CH 4
-#define NUM_STEPS 16
+#define NUM_STEPS 64  // every lane always stores 64; patLen picks how many play
 #define MAX_CHORD 4
 
 #define BPM_MIN 60
@@ -81,6 +82,9 @@ bool editing = false;
 bool playing = false;
 uint8_t playStep = 0;
 uint8_t editCursor = 0;
+// How many of the 64 stored steps play, shared by all lanes like the clock.
+// Shortening never erases: lengthen again and the steps come back.
+uint8_t patLen = 16;
 uint32_t stepStart = 0;  // micros
 uint16_t bpm = 100;
 
@@ -101,7 +105,14 @@ uint32_t lastDraw = 0;
 const char *toastMsg = nullptr;  // brief confirmation line, e.g. "Step cleared"
 uint32_t toastUntil = 0;
 uint32_t ledCache[NUM_CH] = {1, 1, 1, 1};  // impossible value forces first show
-uint32_t potAccum = 0;
+
+struct Pot {
+  uint8_t pin;
+  uint32_t accum;         // IIR, 8x the filtered value
+  uint16_t lastFiltered;
+};
+Pot bpmPot = {POT_PIN, 0, 0};
+Pot lenPot = {LEN_POT_PIN, 0, 0};
 
 const char *NOTE_NAMES[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 
@@ -158,7 +169,7 @@ void stopClock() {
 }
 
 void fireStep() {
-  uint8_t nextIdx = (playStep + 1) % NUM_STEPS;
+  uint8_t nextIdx = (playStep + 1) % patLen;
   for (uint8_t c = 0; c < NUM_CH; c++) {
     if (!chans[c].sequencer) continue;
     Step &s = chans[c].steps[playStep];
@@ -201,7 +212,7 @@ void advanceClock(uint32_t now) {
   if (now - stepStart < su) return;
   stepStart += su;  // accumulate, so the grid doesn't drift with loop jitter
   if (now - stepStart >= su * 2) stepStart = now;  // resync if we fell behind
-  playStep = (playStep + 1) % NUM_STEPS;
+  playStep = (playStep + 1) % patLen;  // shortening lands back in the window here
   fireStep();
   displayDirty = true;
 }
@@ -235,8 +246,17 @@ void previewStep() {
   chans[active].gateArmed = true;
 }
 
+// The length pot is live in every mode, mid-playback included. Playback wraps
+// into range on its own at the next step; the edit cursor has to be pulled in.
+void setPatLen(uint8_t n) {
+  if (n == patLen) return;
+  patLen = n;
+  if (editCursor >= patLen) editCursor = patLen - 1;
+  displayDirty = true;
+}
+
 void moveCursor(int8_t delta) {
-  editCursor = (editCursor + NUM_STEPS + delta) % NUM_STEPS;
+  editCursor = (editCursor + patLen + delta) % patLen;
   previewStep();
   displayDirty = true;
 }
@@ -369,25 +389,38 @@ void handleButton(uint8_t i) {
   }
 }
 
-void readPot(uint32_t now) {
+// Primed from the real wiper so the first reading isn't an eighth of it.
+void primePot(Pot &p) {
+  p.accum = (uint32_t)analogRead(p.pin) << 3;
+  p.lastFiltered = p.accum >> 3;
+}
+
+// true with *out filled when this pot moved past the deadband.
+bool potMoved(Pot &p, uint16_t &out) {
+  p.accum = p.accum - (p.accum >> 3) + analogRead(p.pin);
+  uint16_t filtered = p.accum >> 3;
+  int16_t drift = (int16_t)filtered - (int16_t)p.lastFiltered;
+  if (drift < POT_DEADBAND && drift > -POT_DEADBAND) return false;
+  p.lastFiltered = filtered;
+  out = filtered;
+  return true;
+}
+
+void readPots(uint32_t now) {
   static uint32_t lastSample = 0;
-  static uint16_t lastFiltered = 0xFFFF;
   if (now - lastSample < POT_INTERVAL_US) return;
   lastSample = now;
 
-  potAccum = potAccum - (potAccum >> 3) + analogRead(POT_PIN);
-  uint16_t filtered = potAccum >> 3;
-  if (lastFiltered != 0xFFFF) {
-    int16_t drift = (int16_t)filtered - (int16_t)lastFiltered;
-    if (drift < POT_DEADBAND && drift > -POT_DEADBAND) return;
+  uint16_t v;
+  if (potMoved(bpmPot, v)) {
+    uint16_t next = map(v, 0, 1023, BPM_MIN, BPM_MAX);
+    if (next != bpm) {
+      bpm = next;
+      displayDirty = true;
+    }
   }
-  lastFiltered = filtered;
-
-  uint16_t next = map(filtered, 0, 1023, BPM_MIN, BPM_MAX);
-  if (next != bpm) {
-    bpm = next;
-    displayDirty = true;
-  }
+  // 1024 counts over 64 lengths is 16 per step, well clear of the deadband.
+  if (potMoved(lenPot, v)) setPatLen(map(v, 0, 1023, 1, NUM_STEPS));
 }
 
 void updateLeds() {
@@ -411,7 +444,7 @@ void updateLeds() {
 }
 
 void printStepNum(uint8_t n) {
-  if (n < 10) display.print('0');  // always two digits: 01 .. 16
+  if (n < 10) display.print('0');  // always two digits: 01 .. 64
   display.print(n);
 }
 
@@ -438,6 +471,8 @@ void updateDisplay(uint32_t now) {
     display.setCursor(0, 0);
     display.print("CH");
     display.print(active + 1);
+    display.print(" L");
+    display.print(patLen);
   }
 
   display.setCursor(SCREEN_WIDTH - 46, 0);
@@ -578,6 +613,32 @@ void selftest() {
   noteOff(76);  // stray release of the ignored note must not re-commit
   stCheck("stray release is inert", editCursor, 1);
 
+  // Length windows playback and the cursor without erasing anything past it.
+  clearChannel(0);
+  patLen = 16;
+  editCursor = 15;
+  chans[0].steps[20].type = STEP_CHORD;  // outside the window
+  chans[0].steps[20].count = 1;
+  chans[0].steps[20].notes[0] = 72;
+  moveCursor(1);
+  stCheck("cursor wraps at length", editCursor, 0);
+  setPatLen(8);
+  editCursor = 12;
+  setPatLen(8);          // no-op, cursor must stay put
+  stCheck("same length leaves cursor", editCursor, 12);
+  patLen = 16;
+  editCursor = 12;
+  setPatLen(8);
+  stCheck("shrink pulls cursor in", editCursor, 7);
+  playStep = 20;
+  stepStart = micros();
+  advanceClock(micros() + stepUs());
+  stCheck("playback wraps into window", playStep < patLen, 1);
+  setPatLen(32);
+  stCheck("step past old length survives", chans[0].steps[20].count, 1);
+  stCheck("its note survives", chans[0].steps[20].notes[0], 72);
+  patLen = 16;
+
   editing = false;
   clearChannel(0);
   chans[0].sequencer = false;
@@ -620,7 +681,10 @@ void setup() {
   display.display();
   delay(2000);  // splash; the only delay() in the sketch
 
-  potAccum = (uint32_t)analogRead(POT_PIN) << 3;
+  primePot(bpmPot);
+  primePot(lenPot);
+  bpm = map(bpmPot.lastFiltered, 0, 1023, BPM_MIN, BPM_MAX);
+  patLen = map(lenPot.lastFiltered, 0, 1023, 1, NUM_STEPS);
   displayDirty = true;
 
 #ifdef LOONO_SELFTEST
@@ -654,7 +718,7 @@ void loop() {
     if (buttons[i].fell()) handleButton(i);
   }
 
-  readPot(now);
+  readPots(now);
   updateLeds();
   updateDisplay(now);
 }

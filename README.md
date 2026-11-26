@@ -12,7 +12,7 @@ flowchart LR
     MI --> LOONO[["LOONO<br/>note channel remap"]]
     LOONO -->|MIDI out · TX| SA[Synth A]
     SA -->|thru| SB[Synth B …]
-    CTRL[D2–D9 buttons + A0 pot] -.-> LOONO
+    CTRL[D2–D9 buttons + A0/A1 pots] -.-> LOONO
     LOONO -.-> OUT[OLED + NeoPixel ×4]
 ```
 
@@ -24,9 +24,10 @@ Remapping happens per message, using whichever channel is active right then — 
 |---|---|---|
 | `D2`–`D9` | Panel buttons | Function depends on mode — see Button map below |
 | `A0` | Tempo pot | 60–160 BPM, live while playing |
+| `A1` | Length pot | 1–64 steps, global across all four lanes, live while playing |
 | `RX` / `D0` | MIDI in | Opto-isolated DIN in from the Keylab, 31250 baud |
 | `TX` / `D1` | MIDI out | DIN out, daisy-chains to the synths |
-| `SDA` / `SCL` | OLED | 128×64 SSD1306, I2C — shows BPM, channel or transport + step (`Loono 01` / `Play. 05`), and note names while editing |
+| `SDA` / `SCL` | OLED | 128×64 SSD1306, I2C — shows BPM, channel + length (`CH1 L32`) or transport + step (`Loono 01` / `Play. 05`), and note names while editing |
 | `D11` | NeoPixel ×4 | One LED per channel, mirrors active/mode state |
 
 | LED state | Appearance |
@@ -37,7 +38,7 @@ Remapping happens per message, using whichever channel is active right then — 
 | Inactive, sequencer | Dim violet |
 | Inactive, standard | Off |
 
-Colour carries the mode, so the OLED doesn't repeat it: the active LED turns orange for as long as the channel is in edit mode, and back to violet on exit. The big line reads `Loono 01` in standard mode (device + active channel), and `Play. 05` / `Pause 05` / `Edit 03` once the channel has a lane, with held note names beneath while a chord is being built. BPM sits top-right throughout.
+Colour carries the mode, so the OLED doesn't repeat it: the active LED turns orange for as long as the channel is in edit mode, and back to violet on exit. The big line reads `Loono 01` in standard mode (device + active channel), and `Play. 05` / `Pause 05` / `Edit 03` once the channel has a lane, with held note names beneath while a chord is being built. BPM sits top-right throughout; in sequencer and edit mode the top-left reads `CH1 L32` — active channel and current pattern length.
 
 ## Button map by mode
 
@@ -59,7 +60,7 @@ Pressing the already-active channel button toggles it into sequencer mode instea
 
 ### Sequencer (not editing)
 
-Channel owns a 16-step lane that joins the shared clock; row 1 still picks the active channel. A channel is either sequenced or played live, never both — while in sequencer mode its notes come only from its lane, and Keylab keys do not pass through on it. The exception is edit mode, where keys sound so you can hear what you're recording.
+Channel owns a lane that joins the shared clock; row 1 still picks the active channel. A channel is either sequenced or played live, never both — while in sequencer mode its notes come only from its lane, and Keylab keys do not pass through on it. The exception is edit mode, where keys sound so you can hear what you're recording.
 
 | D2 | D3 | D4 | D5 |
 |---|---|---|---|
@@ -69,7 +70,13 @@ Channel owns a 16-step lane that joins the shared clock; row 1 still picks the a
 |---|---|---|---|
 | Play / Pause | Edit (arm) | — | Clear all |
 
-Clear all is live here too, running or paused — it rests the whole active lane so a bad pattern can be wiped without stopping the clock, with the same one-second `All cleared` confirmation. Play/Pause starts or stops one shared 16-step clock for every sequencer-mode channel at once (never per-channel) — step 1 fires for all of them together, then step 2, and so on. Pause holds position; the next Play resumes from that step rather than restarting at 1. Each step is a **chord** (up to 4 notes), a **rest** (silence), or a **tie** (holds whatever the last chord was).
+Clear all is live here too, running or paused — it rests the whole active lane so a bad pattern can be wiped without stopping the clock, with the same one-second `All cleared` confirmation. Play/Pause starts or stops one shared clock for every sequencer-mode channel at once (never per-channel) — step 1 fires for all of them together, then step 2, and so on. Pause holds position; the next Play resumes from that step rather than restarting at 1. Each step is a **chord** (up to 4 notes), a **rest** (silence), or a **tie** (holds whatever the last chord was).
+
+### Pattern length
+
+Every lane always stores **64 steps**. The `A1` pot picks how many of them play, 1–64, and that length is global — one value for all four lanes, like the clock. It is live in every mode, mid-playback included, so the loop can be squeezed to an 8-step stutter and opened back out while the clock runs.
+
+Shortening never erases. Record 32 steps, turn the length down to 16 and you hear steps 1–16; turn it back to 32 and steps 17–32 play again exactly as recorded. A length cut mid-playback takes effect at the next step boundary, so the chord already ringing finishes its gate. The length also bounds editing: at 16 the cursor moves over steps 1–16, at 12 over steps 1–12 — set the length you want before recording into it. `Clear all` ignores the window and rests all 64 stored steps.
 
 A step is one 8th note: `60000 / BPM / 2` ms — 500 ms at 60 BPM down to 188 ms at 160 BPM. Chord gate length is tempo-dependent, since one fixed ratio doesn't suit both ends of the range:
 
@@ -94,7 +101,7 @@ Row 1 switches to step editing; row 2 keeps exit and the clear actions (clear al
 |---|---|---|---|
 | — | Exit edit | Clear step | Clear all |
 
-Hold Keylab keys and release them all to commit that chord to the cursor and advance one step (wraps 16→1). The first 4 notes pressed are recorded; any held beyond that sound but are not stored. **Skip** writes a rest and advances; **Tie** marks sustain-previous and advances; **Prev/Next** move the cursor without writing; **Clear step** rests the current step in place; **Clear all** rests the whole 16-step lane. Either clear shows a one-second `Step cleared` / `All cleared` confirmation.
+Hold Keylab keys and release them all to commit that chord to the cursor and advance one step (wraps at the pattern length). The first 4 notes pressed are recorded; any held beyond that sound but are not stored. **Skip** writes a rest and advances; **Tie** marks sustain-previous and advances; **Prev/Next** move the cursor without writing; **Clear step** rests the current step in place; **Clear all** rests all 64 stored steps of the lane, not just the ones in the current length window. Either clear shows a one-second `Step cleared` / `All cleared` confirmation.
 
 Editing is audible, which is what makes the lane reviewable:
 
