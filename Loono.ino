@@ -392,7 +392,7 @@ void updateLeds() {
             : chans[c].sequencer     ? pixels.Color(12, 0, 24)  // violet
                                      : pixels.Color(0, 20, 0);  // green
     } else {
-      color = chans[c].sequencer ? pixels.Color(3, 0, 6) : 0; // dim violet / off
+      color = chans[c].sequencer ? pixels.Color(1, 0, 3) : 0; // dim violet / off
     }
     if (color != ledCache[c]) {
       ledCache[c] = color;
