@@ -395,8 +395,11 @@ void handleButton(uint8_t i) {
   }
 }
 
-// Primed from the real wiper so the first reading isn't an eighth of it.
+// Primed from the real wiper so the first reading isn't an eighth of it. The
+// first read after an ADC channel switch sits ~20 counts off (measured on the
+// board), which is most of POT_TAKEOVER, so that one is thrown away.
 void primePot(Pot &p) {
+  analogRead(p.pin);
   p.accum = (uint32_t)analogRead(p.pin) << 3;
   p.lastFiltered = p.accum >> 3;
   p.anchor = p.lastFiltered;
