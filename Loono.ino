@@ -684,7 +684,8 @@ void setup() {
   primePot(bpmPot);
   primePot(lenPot);
   bpm = map(bpmPot.lastFiltered, 0, 1023, BPM_MIN, BPM_MAX);
-  patLen = map(lenPot.lastFiltered, 0, 1023, 1, NUM_STEPS);
+  // Length boots at its default instead of the knob, so a pot left at 3 or 57
+  // doesn't decide the pattern; the first turn of A1 takes it over.
   displayDirty = true;
 
 #ifdef LOONO_SELFTEST

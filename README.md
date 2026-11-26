@@ -24,7 +24,7 @@ Remapping happens per message, using whichever channel is active right then — 
 |---|---|---|
 | `D2`–`D9` | Panel buttons | Function depends on mode — see Button map below |
 | `A0` | Tempo pot | 60–160 BPM, live while playing |
-| `A1` | Length pot | 1–64 steps, global across all four lanes, live while playing |
+| `A1` | Length pot | 1–64 steps, global across all four lanes, live while playing; length boots at 16 until the knob is first turned |
 | `RX` / `D0` | MIDI in | Opto-isolated DIN in from the Keylab, 31250 baud |
 | `TX` / `D1` | MIDI out | DIN out, daisy-chains to the synths |
 | `SDA` / `SCL` | OLED | 128×64 SSD1306, I2C — shows BPM, channel + length (`CH1 L32`) or transport + step (`Loono 01` / `Play. 05`), and note names while editing |
@@ -74,7 +74,7 @@ Clear all is live here too, running or paused — it rests the whole active lane
 
 ### Pattern length
 
-Every lane always stores **64 steps**. The `A1` pot picks how many of them play, 1–64, and that length is global — one value for all four lanes, like the clock. It is live in every mode, mid-playback included, so the loop can be squeezed to an 8-step stutter and opened back out while the clock runs.
+Every lane always stores **64 steps**. The `A1` pot picks how many of them play, 1–64, and that length is global — one value for all four lanes, like the clock. It is live in every mode, mid-playback included, so the loop can be squeezed to an 8-step stutter and opened back out while the clock runs. Length boots at **16** rather than reading the knob, so a pot left at some odd position doesn't decide the pattern; the first turn of `A1` takes it over and it tracks the knob from then on.
 
 Shortening never erases. Record 32 steps, turn the length down to 16 and you hear steps 1–16; turn it back to 32 and steps 17–32 play again exactly as recorded. A length cut mid-playback takes effect at the next step boundary, so the chord already ringing finishes its gate. The length also bounds editing: at 16 the cursor moves over steps 1–16, at 12 over steps 1–12 — set the length you want before recording into it. `Clear all` ignores the window and rests all 64 stored steps.
 
