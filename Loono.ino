@@ -332,6 +332,14 @@ void readMidi() {
 }
 
 void handleButton(uint8_t i) {
+  // Clear-all is live whenever the active lane is a sequencer, running or not,
+  // so a bad pattern can be wiped without stopping.
+  if (i == 7 && chans[active].sequencer) {
+    clearChannel(active);
+    toast("All cleared");
+    return;
+  }
+
   if (editing) {
     switch (i) {
       case 0: moveCursor(-1); break;
@@ -344,7 +352,6 @@ void handleButton(uint8_t i) {
               stopSounding(active);
               toast("Step cleared");
               break;
-      case 7: clearChannel(active); toast("All cleared"); break;
     }
     return;
   }

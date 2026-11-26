@@ -67,9 +67,9 @@ Channel owns a 16-step lane that joins the shared clock; row 1 still picks the a
 
 | D6 | D7 | D8 | D9 |
 |---|---|---|---|
-| Play / Pause | Edit (arm) | — | — |
+| Play / Pause | Edit (arm) | — | Clear all |
 
-Play/Pause starts or stops one shared 16-step clock for every sequencer-mode channel at once (never per-channel) — step 1 fires for all of them together, then step 2, and so on. Pause holds position; the next Play resumes from that step rather than restarting at 1. Each step is a **chord** (up to 4 notes), a **rest** (silence), or a **tie** (holds whatever the last chord was).
+Clear all is live here too, running or paused — it rests the whole active lane so a bad pattern can be wiped without stopping the clock, with the same one-second `All cleared` confirmation. Play/Pause starts or stops one shared 16-step clock for every sequencer-mode channel at once (never per-channel) — step 1 fires for all of them together, then step 2, and so on. Pause holds position; the next Play resumes from that step rather than restarting at 1. Each step is a **chord** (up to 4 notes), a **rest** (silence), or a **tie** (holds whatever the last chord was).
 
 A step is one 8th note: `60000 / BPM / 2` ms — 500 ms at 60 BPM down to 188 ms at 160 BPM. Chord gate length is tempo-dependent, since one fixed ratio doesn't suit both ends of the range:
 
@@ -84,7 +84,7 @@ Each recorded note keeps the velocity it was played at. A tie on step 1 has noth
 
 ### Edit (sub-mode of sequencer)
 
-Row 1 switches to step editing; row 2 keeps only exit and the clear actions. Entering edit always stops the clock and resets the cursor to step 1.
+Row 1 switches to step editing; row 2 keeps exit and the clear actions (clear all sits on the same button as in sequencer mode). Entering edit always stops the clock and resets the cursor to step 1.
 
 | D2 | D3 | D4 | D5 |
 |---|---|---|---|
