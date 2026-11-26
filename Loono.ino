@@ -48,7 +48,7 @@ Adafruit_NeoPixel pixels(NEOPIXEL_COUNT, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 #define POT_DEADBAND 4
 
 // Full-frame OLED refresh is ~25ms at 400kHz, so it must never land on a step
-// boundary (94ms at 160 BPM). Throttled, and skipped near the next step.
+// boundary (188ms at 160 BPM). Throttled, and skipped near the next step.
 #define DISPLAY_MIN_INTERVAL_US 120000
 #define DISPLAY_STEP_GUARD_US 40000
 
@@ -105,9 +105,9 @@ uint32_t potAccum = 0;
 
 const char *NOTE_NAMES[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 
-// Microseconds, not millis: at 160 BPM a step is 93.75ms, and truncating that
-// to 93ms runs the tempo ~0.8% fast and drifts the grid.
-uint32_t stepUs() { return 15000000UL / bpm; }
+// One step = one 1/8 note. Microseconds, not millis: at 160 BPM a step is
+// 187.5ms, and truncating that to 187ms runs the tempo fast and drifts the grid.
+uint32_t stepUs() { return 30000000UL / bpm; }
 
 uint32_t gateUs() {
   uint8_t pct = (bpm >= GATE_SPLIT_BPM) ? GATE_PCT_FAST : GATE_PCT_SLOW;
@@ -388,8 +388,9 @@ void updateLeds() {
   for (uint8_t c = 0; c < NUM_CH; c++) {
     uint32_t color;
     if (c == active) {
-      color = chans[c].sequencer ? pixels.Color(12, 0, 24)   // violet
-                                 : pixels.Color(0, 20, 0);   // green
+      color = editing                ? pixels.Color(24, 8, 0)   // orange
+            : chans[c].sequencer     ? pixels.Color(12, 0, 24)  // violet
+                                     : pixels.Color(0, 20, 0);  // green
     } else {
       color = chans[c].sequencer ? pixels.Color(3, 0, 6) : 0; // dim violet / off
     }
@@ -503,12 +504,12 @@ void stCheck(const char *name, long got, long want) {
 void selftest() {
   stFails = 0;
 
-  bpm = 60;  stCheck("stepUs@60", stepUs(), 250000);
-  bpm = 120; stCheck("stepUs@120", stepUs(), 125000);
-  bpm = 160; stCheck("stepUs@160 keeps .75ms", stepUs(), 93750);
+  bpm = 60;  stCheck("stepUs@60 is 1/8 note", stepUs(), 500000);
+  bpm = 120; stCheck("stepUs@120", stepUs(), 250000);
+  bpm = 160; stCheck("stepUs@160 keeps .5ms", stepUs(), 187500);
 
-  bpm = 100; stCheck("gate@100 slow 70pct", gateUs(), 105000);
-  bpm = 120; stCheck("gate@120 fast 90pct", gateUs(), 112500);
+  bpm = 100; stCheck("gate@100 slow 70pct", gateUs(), 210000);
+  bpm = 120; stCheck("gate@120 fast 90pct", gateUs(), 225000);
 
   clearChannel(0);
   stCheck("cleared step is rest", chans[0].steps[3].type, STEP_REST);

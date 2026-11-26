@@ -33,10 +33,11 @@ Remapping happens per message, using whichever channel is active right then — 
 |---|---|
 | Active, standard | Green |
 | Active, sequencer | Violet |
+| Active, sequencer, edit mode | Orange |
 | Inactive, sequencer | Dim violet |
 | Inactive, standard | Off |
 
-Colour carries the mode, so the OLED doesn't repeat it. The big line reads `Loono 01` in standard mode (device + active channel), and `Play. 05` / `Pause 05` / `Edit 03` once the channel has a lane, with held note names beneath while a chord is being built. BPM sits top-right throughout.
+Colour carries the mode, so the OLED doesn't repeat it: the active LED turns orange for as long as the channel is in edit mode, and back to violet on exit. The big line reads `Loono 01` in standard mode (device + active channel), and `Play. 05` / `Pause 05` / `Edit 03` once the channel has a lane, with held note names beneath while a chord is being built. BPM sits top-right throughout.
 
 ## Button map by mode
 
@@ -70,7 +71,7 @@ Channel owns a 16-step lane that joins the shared clock; row 1 still picks the a
 
 Play/Pause starts or stops one shared 16-step clock for every sequencer-mode channel at once (never per-channel) — step 1 fires for all of them together, then step 2, and so on. Pause holds position; the next Play resumes from that step rather than restarting at 1. Each step is a **chord** (up to 4 notes), a **rest** (silence), or a **tie** (holds whatever the last chord was).
 
-A step is one 16th note: `60000 / BPM / 4` ms — 250 ms at 60 BPM down to 94 ms at 160 BPM. Chord gate length is tempo-dependent, since one fixed ratio doesn't suit both ends of the range:
+A step is one 8th note: `60000 / BPM / 2` ms — 500 ms at 60 BPM down to 188 ms at 160 BPM. Chord gate length is tempo-dependent, since one fixed ratio doesn't suit both ends of the range:
 
 | Tempo | Gate | Why |
 |---|---|---|
@@ -106,7 +107,7 @@ Editing is audible, which is what makes the lane reviewable:
 The previous build was abandoned over MIDI latency, skipped LED beats, and notes landing off-grid. Two rules exist to prevent a repeat:
 
 - **MIDI first, always.** Read and forward MIDI before any display or LED work in the loop, and never block it — no `delay()` outside `setup()`.
-- **Never redraw the full OLED on the step path.** A full 128×64 SSD1306 frame over I2C costs roughly 25 ms; a step at 160 BPM is 94 ms. Redraw only the small rect that changed, and throttle updates independently of the step clock.
+- **Never redraw the full OLED on the step path.** A full 128×64 SSD1306 frame over I2C costs roughly 25 ms; a step at 160 BPM is 188 ms. Redraw only the small rect that changed, and throttle updates independently of the step clock.
 
 ## Startup state
 
