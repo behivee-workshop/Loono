@@ -47,6 +47,10 @@ Adafruit_NeoPixel pixels(NEOPIXEL_COUNT, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 // display and wobble the step length). Both are tuning values.
 #define POT_INTERVAL_US 5000
 #define POT_DEADBAND 4
+// The length pot must be *turned* to take over the 16-step default, so ADC
+// noise (or a floating pin) can't silently decide the pattern. 24 counts is
+// ~1.5 length steps — far above the jitter the deadband already absorbs.
+#define POT_TAKEOVER 24
 
 // Full-frame OLED refresh is ~25ms at 400kHz, so it must never land on a step
 // boundary (188ms at 160 BPM). Throttled, and skipped near the next step.
@@ -110,9 +114,11 @@ struct Pot {
   uint8_t pin;
   uint32_t accum;         // IIR, 8x the filtered value
   uint16_t lastFiltered;
+  uint16_t anchor;        // where it sat at boot, for the takeover test
 };
-Pot bpmPot = {POT_PIN, 0, 0};
-Pot lenPot = {LEN_POT_PIN, 0, 0};
+Pot bpmPot = {POT_PIN, 0, 0, 0};
+Pot lenPot = {LEN_POT_PIN, 0, 0, 0};
+bool lenPotLive = false;  // false until A1 is actually turned
 
 const char *NOTE_NAMES[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 
@@ -393,6 +399,7 @@ void handleButton(uint8_t i) {
 void primePot(Pot &p) {
   p.accum = (uint32_t)analogRead(p.pin) << 3;
   p.lastFiltered = p.accum >> 3;
+  p.anchor = p.lastFiltered;
 }
 
 // true with *out filled when this pot moved past the deadband.
@@ -420,7 +427,13 @@ void readPots(uint32_t now) {
     }
   }
   // 1024 counts over 64 lengths is 16 per step, well clear of the deadband.
-  if (potMoved(lenPot, v)) setPatLen(map(v, 0, 1023, 1, NUM_STEPS));
+  if (potMoved(lenPot, v)) {
+    if (!lenPotLive) {
+      int16_t turned = (int16_t)v - (int16_t)lenPot.anchor;
+      if (turned >= POT_TAKEOVER || turned <= -POT_TAKEOVER) lenPotLive = true;
+    }
+    if (lenPotLive) setPatLen(map(v, 0, 1023, 1, NUM_STEPS));
+  }
 }
 
 void updateLeds() {

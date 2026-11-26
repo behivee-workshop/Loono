@@ -74,7 +74,7 @@ Clear all is live here too, running or paused — it rests the whole active lane
 
 ### Pattern length
 
-Every lane always stores **64 steps**. The `A1` pot picks how many of them play, 1–64, and that length is global — one value for all four lanes, like the clock. It is live in every mode, mid-playback included, so the loop can be squeezed to an 8-step stutter and opened back out while the clock runs. Length boots at **16** rather than reading the knob, so a pot left at some odd position doesn't decide the pattern; the first turn of `A1` takes it over and it tracks the knob from then on.
+Every lane always stores **64 steps**. The `A1` pot picks how many of them play, 1–64, and that length is global — one value for all four lanes, like the clock. It is live in every mode, mid-playback included, so the loop can be squeezed to an 8-step stutter and opened back out while the clock runs. Length boots at **16** rather than reading the knob, so a pot left at some odd position doesn't decide the pattern. Takeover needs the knob *turned* — 24 ADC counts, about 1.5 steps, away from where it sat at power-on — so ADC noise can't quietly reassign the length. Once turned it tracks the knob absolutely from then on.
 
 Shortening never erases. Record 32 steps, turn the length down to 16 and you hear steps 1–16; turn it back to 32 and steps 17–32 play again exactly as recorded. A length cut mid-playback takes effect at the next step boundary, so the chord already ringing finishes its gate. The length also bounds editing: at 16 the cursor moves over steps 1–16, at 12 over steps 1–12 — set the length you want before recording into it. `Clear all` ignores the window and rests all 64 stored steps.
 
